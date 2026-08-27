@@ -29,12 +29,15 @@ export type NavItem = {
   adminOnly?: boolean;
   /** Admins and employees alike, but never owners. */
   staffOnly?: boolean;
+  /** The owner portal's own entry — hidden from staff. */
+  ownerOnly?: boolean;
   /** Employees see the item only when they hold this permission. */
   permission?: string;
 };
 
 export const navItems: NavItem[] = [
   { href: "/", label: "الرئيسية", icon: LayoutDashboard },
+  { href: "/portal", label: "بوابتي", icon: LayoutDashboard, ownerOnly: true },
   { href: "/buildings", label: "المباني", icon: Building2, permission: "buildings.view" },
   { href: "/units", label: "الوحدات", icon: DoorOpen, permission: "buildings.view" },
   { href: "/owners", label: "الملاك", icon: Users, permission: "owners.view" },

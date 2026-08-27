@@ -7,8 +7,8 @@ import { cn } from "@/lib/utils";
 import { navEntries, type NavItem } from "@/components/nav-items";
 import { ChevronDown } from "lucide-react";
 
-/** The owner portal keeps its original, read-only set of pages. */
-const OWNER_VISIBLE = new Set(["/buildings", "/units", "/tenants", "/contracts", "/payments", "/expenses", "/documents"]);
+/** Everything the owner needs now lives in the portal, so the staff pages are not theirs. */
+const OWNER_VISIBLE = new Set(["/portal"]);
 
 export function SidebarNav({
   role,
@@ -24,9 +24,10 @@ export function SidebarNav({
   const [opened, setOpened] = useState<Record<string, boolean>>({});
 
   const visible = (item: NavItem) => {
+    if (item.ownerOnly) return role === "OWNER";
     if (role === "ADMIN") return true;
     if (item.adminOnly) return false;
-    if (role === "OWNER") return !item.staffOnly && (!item.permission || OWNER_VISIBLE.has(item.href));
+    if (role === "OWNER") return !item.staffOnly && OWNER_VISIBLE.has(item.href);
     return !item.permission || (allowed ?? []).includes(item.permission);
   };
 

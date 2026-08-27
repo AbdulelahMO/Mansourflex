@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Building2, FileText, Wallet, Bell } from "lucide-react";
+import { LayoutDashboard, Building2, FileText, Wallet, Bell, ReceiptText } from "lucide-react";
 
-const items = [
+const STAFF_ITEMS = [
   { href: "/", label: "الرئيسية", icon: LayoutDashboard },
   { href: "/buildings", label: "المباني", icon: Building2 },
   { href: "/contracts", label: "العقود", icon: FileText },
@@ -13,8 +13,15 @@ const items = [
   { href: "/notifications", label: "الإشعارات", icon: Bell },
 ];
 
-export function BottomNav({ className }: { className?: string }) {
+/** The owner's shortcuts point inside their portal; the staff pages are closed to them. */
+const OWNER_ITEMS = [
+  { href: "/portal", label: "بوابتي", icon: LayoutDashboard },
+  { href: "/account", label: "حسابي", icon: ReceiptText },
+];
+
+export function BottomNav({ className, role }: { className?: string; role?: "ADMIN" | "OWNER" | "EMPLOYEE" }) {
   const pathname = usePathname();
+  const items = role === "OWNER" ? OWNER_ITEMS : STAFF_ITEMS;
 
   return (
     <nav className={cn("fixed inset-x-0 bottom-0 z-40 flex h-16 items-stretch border-t bg-background md:hidden", className)}>

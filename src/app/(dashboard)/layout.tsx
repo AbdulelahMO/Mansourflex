@@ -69,7 +69,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <main className="flex-1 p-4 pb-20 md:p-6 md:pb-6 print:p-0">{children}</main>
       </div>
 
-      <BottomNav className="print:hidden" />
+      <BottomNav className="print:hidden" role={role} />
     </div>
   );
 }

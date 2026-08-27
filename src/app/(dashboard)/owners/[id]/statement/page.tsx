@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requirePagePermission } from "@/lib/authz";
+import { requireUser } from "@/lib/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PrintButton } from "@/components/contracts/print-button";
@@ -30,7 +31,13 @@ function parseDate(value: unknown, fallback: string) {
 
 export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/statement">) {
   const { id } = await props.params;
-  await requirePagePermission("statements.view");
+  const viewer = await requireUser();
+  // An owner reaches their own statement from the portal; staff need the permission.
+  if (viewer.role === "OWNER") {
+    if (viewer.ownerId !== id) notFound();
+  } else {
+    await requirePagePermission("statements.view");
+  }
   const params = await props.searchParams;
 
   const fallback = defaultPeriod();

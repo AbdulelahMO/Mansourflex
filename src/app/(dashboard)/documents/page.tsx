@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { notFound } from "next/navigation";
 import { requireUser, buildingScope } from "@/lib/session";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -35,6 +36,8 @@ const TYPE_TONES: Record<string, string> = {
 
 export default async function FinancialDocumentsPage(props: PageProps<"/documents">) {
   const user = await requireUser();
+  // The owner's documents live in their portal; this register is the staff view.
+  if (user.role === "OWNER") notFound();
   const scope = buildingScope(user);
   const params = await props.searchParams;
 

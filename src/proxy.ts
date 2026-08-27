@@ -5,7 +5,18 @@ import { auth } from "@/auth";
 const ADMIN_ONLY_PREFIXES = ["/settings/employees"];
 
 /** The owner portal is read-only and never sees staff-side sections. */
-const OWNER_BLOCKED_PREFIXES = ["/owners", "/agreements", "/settings", "/approvals"];
+const OWNER_BLOCKED_PREFIXES = [
+  "/buildings",
+  "/units",
+  "/tenants",
+  "/contracts",
+  "/payments",
+  "/expenses",
+  "/agreements",
+  "/settings",
+  "/approvals",
+  "/notifications",
+];
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;
@@ -20,7 +31,12 @@ export default auth((req) => {
   }
 
   if (isLoggedIn && isPublic) {
-    return NextResponse.redirect(new URL("/", req.nextUrl.origin));
+    return NextResponse.redirect(new URL(role === "OWNER" ? "/portal" : "/", req.nextUrl.origin));
+  }
+
+  // The dashboard is the staff view; an owner's home is their portal.
+  if (isLoggedIn && role === "OWNER" && pathname === "/") {
+    return NextResponse.redirect(new URL("/portal", req.nextUrl.origin));
   }
 
   // Everything else is decided per page by the permission gate, so an employee's access
