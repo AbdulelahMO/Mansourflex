@@ -127,7 +127,7 @@ export async function updateExpense(id: string, _prev: ActionState, formData: Fo
   // The voucher evidences a disbursement that happened; unpaying the expense would leave it dangling.
   if (!d.paidDate) {
     const voucher = await prisma.financialDocument.findFirst({
-      where: { expenseId: id, type: "PAYMENT_VOUCHER" },
+      where: { expenseId: id, type: "PAYMENT_VOUCHER", status: { not: "CANCELLED" } },
       select: { documentNumber: true },
     });
     if (voucher) {

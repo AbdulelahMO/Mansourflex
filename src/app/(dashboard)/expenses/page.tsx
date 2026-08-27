@@ -74,7 +74,7 @@ export default async function ExpensesPage(props: PageProps<"/expenses">) {
       include: {
         building: { select: { id: true, name: true } },
         unit: { select: { unitNumber: true } },
-        documents: { where: { type: "PAYMENT_VOUCHER" }, select: { id: true, documentNumber: true } },
+        documents: { where: { type: "PAYMENT_VOUCHER", status: { not: "CANCELLED" } }, select: { id: true, documentNumber: true } },
         createdBy: { select: { name: true } },
       },
       orderBy: [{ expenseDate: "desc" }],

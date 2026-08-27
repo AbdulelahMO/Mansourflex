@@ -5,6 +5,7 @@ import { RichStatCard, type StatRowItem } from "@/components/dashboard/rich-stat
 import { OutstandingContractsList, type OutstandingContract } from "@/components/dashboard/outstanding-contracts-list";
 import { TopCollectionsChart, type InsightItem, type UpcomingPaymentItem } from "@/components/dashboard/top-collections-chart";
 import { SectorDonutChart, type SectorSlice } from "@/components/dashboard/sector-donut-chart";
+import { PeriodSelect } from "@/components/dashboard/period-select";
 import { formatCurrency } from "@/lib/format";
 
 const SECTOR_COLORS: Record<string, string> = {
@@ -20,9 +21,31 @@ function addDays(days: number) {
   return new Date(Date.now() + days * 86_400_000);
 }
 
-export default async function DashboardPage() {
+/** Dashboard figures answer "how are we doing now", so the year is the useful default. */
+const PERIODS = {
+  month: "هذا الشهر",
+  year: "هذا العام",
+  all: "منذ البداية",
+} as const;
+type PeriodKey = keyof typeof PERIODS;
+
+function periodStart(period: PeriodKey) {
+  const now = new Date();
+  if (period === "month") return new Date(now.getFullYear(), now.getMonth(), 1);
+  if (period === "year") return new Date(now.getFullYear(), 0, 1);
+  return null;
+}
+
+export default async function DashboardPage(props: PageProps<"/">) {
   const user = await requireUser();
   const scope = buildingScope(user);
+
+  const params = await props.searchParams;
+  const period: PeriodKey = params.period === "month" || params.period === "all" ? params.period : "year";
+  const from = periodStart(period);
+
+  // An archived property is out of management, so it no longer moves the operating figures.
+  const activeScope = { ...scope, archivedAt: null };
 
   const unpaidStatuses = ["PENDING", "OVERDUE", "PARTIAL"] as const;
   const endOfToday = new Date();
@@ -44,24 +67,24 @@ export default async function DashboardPage() {
     contractSectorsRaw,
   ] = await Promise.all([
     prisma.building.count({ where: scope }),
-    prisma.unit.findMany({ where: { building: scope }, select: { unitType: true, status: true } }),
+    prisma.unit.findMany({ where: { building: activeScope }, select: { unitType: true, status: true } }),
     prisma.tenant.count({
       where:
         user.role === "ADMIN"
           ? undefined
-          : { contracts: { some: { unit: { building: { ownerId: user.ownerId ?? "__none__" } } } } },
+          : { contracts: { some: { unit: { building: { ownerId: user.ownerId ?? "__none__", archivedAt: null } } } } },
     }),
     user.role === "ADMIN" ? prisma.owner.count() : Promise.resolve(0),
-    prisma.contract.findMany({ where: { status: "ACTIVE", unit: { building: scope } }, select: { endDate: true } }),
+    prisma.contract.findMany({ where: { status: "ACTIVE", unit: { building: activeScope } }, select: { endDate: true } }),
     prisma.payment.findMany({
-      where: { status: { in: [...unpaidStatuses] }, dueDate: { lte: endOfToday }, contract: { unit: { building: scope } } },
+      where: { status: { in: [...unpaidStatuses] }, dueDate: { lte: endOfToday }, contract: { unit: { building: activeScope } } },
       select: { amount: true, paidAmount: true },
     }),
     prisma.payment.findMany({
       where: {
         najizReferredAt: { not: null },
         status: { in: [...unpaidStatuses] },
-        contract: { unit: { building: scope } },
+        contract: { unit: { building: activeScope } },
       },
       select: { amount: true, paidAmount: true },
     }),
@@ -69,34 +92,34 @@ export default async function DashboardPage() {
       where: {
         status: "PENDING",
         dueDate: { gte: new Date(), lte: addDays(30) },
-        contract: { unit: { building: scope } },
+        contract: { unit: { building: activeScope } },
       },
       select: { amount: true, paidAmount: true },
     }),
     prisma.contract.count({
-      where: { unit: { building: scope }, payments: { some: { status: { in: [...unpaidStatuses] } } } },
+      where: { unit: { building: activeScope }, payments: { some: { status: { in: [...unpaidStatuses] } } } },
     }),
     prisma.contract.findMany({
-      where: { unit: { building: scope }, payments: { some: { status: { in: [...unpaidStatuses] } } } },
+      where: { unit: { building: activeScope }, payments: { some: { status: { in: [...unpaidStatuses] } } } },
       include: { tenant: true, unit: { include: { building: true } }, payments: true },
       orderBy: { createdAt: "desc" },
       take: 8,
     }),
     prisma.building.findMany({
-      where: scope,
+      where: activeScope,
       include: {
         owner: true,
         units: { include: { contracts: { include: { tenant: true, payments: true } } } },
       },
     }),
     prisma.payment.findMany({
-      where: { status: "PENDING", contract: { unit: { building: scope } } },
+      where: { status: "PENDING", contract: { unit: { building: activeScope } } },
       include: { contract: { include: { tenant: true, unit: { include: { building: true } } } } },
       orderBy: { dueDate: "asc" },
       take: 50,
     }),
     prisma.contract.findMany({
-      where: { unit: { building: scope } },
+      where: { unit: { building: activeScope } },
       select: { unit: { select: { building: { select: { sector: true } } } } },
     }),
   ]);
@@ -137,9 +160,11 @@ export default async function DashboardPage() {
   const totalOutstanding = unpaidPayments.reduce((sum, p) => sum + (p.amount - (p.paidAmount ?? 0)), 0);
   const najizTotal = najizPayments.reduce((sum, p) => sum + (p.amount - (p.paidAmount ?? 0)), 0);
   const upcomingTotal = upcomingDuePayments.reduce((sum, p) => sum + (p.amount - (p.paidAmount ?? 0)), 0);
-  const totalCollected = buildingsWithPayments
+  const collectedPayments = buildingsWithPayments
     .flatMap((b) => b.units.flatMap((u) => u.contracts.flatMap((c) => c.payments)))
-    .reduce((sum, p) => sum + (p.paidAmount ?? 0), 0);
+    .filter((p) => (p.paidAmount ?? 0) > 0 && (!from || (p.paidDate && p.paidDate >= from)));
+
+  const totalCollected = collectedPayments.reduce((sum, p) => sum + (p.paidAmount ?? 0), 0);
   const collectionRate =
     totalCollected + totalOutstanding > 0 ? Math.round((totalCollected / (totalCollected + totalOutstanding)) * 100) : 0;
 
@@ -253,7 +278,11 @@ export default async function DashboardPage() {
           rows={[
             [
               { value: `${collectionRate}%`, label: "نسبة التحصيل", tone: "success", href: "/payments?status=PAID" },
-              { value: formatCurrency(totalCollected), label: "إجمالي المحصل", href: "/payments?status=PAID" },
+              {
+                value: formatCurrency(totalCollected),
+                label: `المحصّل — ${PERIODS[period]}`,
+                labelControl: <PeriodSelect value={period} options={PERIODS} />,
+              },
             ],
             [
               {

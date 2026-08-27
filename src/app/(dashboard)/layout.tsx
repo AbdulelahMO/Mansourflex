@@ -34,6 +34,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
     .map(([key]) => key);
   const orgName = org?.name || "إدارة الأملاك";
 
+  // Owners take no part in approvals; staff see what is waiting on them.
+  const pendingApprovals =
+    role === "OWNER"
+      ? null
+      : {
+          count: await prisma.approvalRequest.count({
+            where: role === "ADMIN" ? { status: "PENDING" } : { status: "PENDING", requestedById: session.user.id },
+          }),
+          isDecider: role === "ADMIN",
+        };
+
   return (
     <div className="flex min-h-screen">
       <aside className="hidden md:flex md:w-64 md:flex-col md:border-l md:bg-background print:hidden">
@@ -47,7 +58,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
       <div className="flex min-h-screen flex-1 flex-col">
         <div className="print:hidden">
-          <Topbar name={name ?? ""} role={role} orgName={orgName} orgLogoUrl={org?.logoUrl} />
+          <Topbar
+            name={name ?? ""}
+            role={role}
+            orgName={orgName}
+            orgLogoUrl={org?.logoUrl}
+            pendingApprovals={pendingApprovals}
+          />
         </div>
         <main className="flex-1 p-4 pb-20 md:p-6 md:pb-6 print:p-0">{children}</main>
       </div>

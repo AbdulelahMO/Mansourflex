@@ -22,7 +22,7 @@ export async function createInvoice(paymentId: string): Promise<ActionState> {
 
   // One invoice per payment — receipts stay unrestricted so each partial payment can get its own.
   const existingInvoice = await prisma.financialDocument.findFirst({
-    where: { paymentId, type: "INVOICE" },
+    where: { paymentId, type: "INVOICE", status: { not: "CANCELLED" } },
     select: { documentNumber: true },
   });
   if (existingInvoice) {
@@ -62,6 +62,7 @@ export async function createReceipt(paymentId: string): Promise<ActionState> {
   return { success: true, message: `تم إصدار سند القبض ${res.documentNumber}` };
 }
 
-export async function deleteFinancialDocument(id: string, reason?: string): Promise<ActionState> {
-  return runSensitive("documents.delete", { id }, reason);
+/** Financial documents are never removed — they are voided and keep their number as a trace. */
+export async function cancelFinancialDocument(id: string, reason?: string): Promise<ActionState> {
+  return runSensitive("documents.cancel", { id, reason }, reason);
 }

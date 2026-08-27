@@ -9,6 +9,9 @@ import { CATEGORY_LABELS, BEARER_LABELS } from "@/lib/expenses";
 type Voucher = {
   documentNumber: string;
   issueDate: Date;
+  status?: string;
+  cancelledAt?: Date | null;
+  cancelReason?: string | null;
   amount: number;
   notes: string | null;
   expense: {
@@ -56,6 +59,17 @@ export function ExpenseVoucherDocument({ voucher, org }: { voucher: Voucher; org
         </Link>
         <PrintButton />
       </div>
+
+      {/* CANCELLED_BANNER */}
+      {voucher.status === "CANCELLED" && (
+        <div className="rounded-lg border-2 border-red-300 bg-red-50 px-4 py-3 text-center">
+          <p className="text-lg font-bold text-red-700">هذا المستند ملغى</p>
+          <p className="text-xs text-red-700">
+            أُلغي بتاريخ {voucher.cancelledAt ? formatDateNumeric(voucher.cancelledAt) : "—"}
+            {voucher.cancelReason ? ` — ${voucher.cancelReason}` : ""}
+          </p>
+        </div>
+      )}
 
       <Card className="print:border-0 print:shadow-none">
         <CardContent className="space-y-6 p-6 sm:p-8">

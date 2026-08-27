@@ -51,7 +51,8 @@ export async function buildingAccount(
       _sum: { amount: true },
     }),
     prisma.ownerRemittance.aggregate({
-      where: { buildingId, remittedAt: window },
+      // A cancelled transfer never reached the owner, so it does not settle anything.
+      where: { buildingId, remittedAt: window, cancelledAt: null },
       _sum: { amount: true },
     }),
   ]);

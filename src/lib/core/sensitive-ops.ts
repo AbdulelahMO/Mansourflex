@@ -145,55 +145,64 @@ export const SENSITIVE_OPS: Record<string, SensitiveOp<never>> = {
     },
   },
 
-  "documents.delete": {
-    permission: "documents.delete",
+  "documents.cancel": {
+    permission: "documents.cancel",
     describe: async ({ id }: IdPayload) => {
-      const d = await prisma.financialDocument.findUnique({ where: { id }, select: { documentNumber: true, amount: true } });
-      return d ? `حذف المستند ${d.documentNumber} بمبلغ ${formatCurrency(d.amount)}` : `حذف المستند ${id}`;
+      const d = await prisma.financialDocument.findUnique({
+        where: { id },
+        select: { documentNumber: true, amount: true },
+      });
+      return d ? `إلغاء المستند ${d.documentNumber} بمبلغ ${formatCurrency(d.amount)}` : `إلغاء المستند ${id}`;
     },
-    run: async ({ id }: IdPayload) => {
+    run: async ({ id, reason }: { id: string; reason?: string }) => {
       const doc = await prisma.financialDocument.findUnique({ where: { id } });
       if (!doc) return missing("المستند");
+      if (doc.status === "CANCELLED") return { error: `سبق إلغاء المستند ${doc.documentNumber}` };
 
-      // A receipt is issued against its invoice, so the invoice can't be removed while one still stands.
+      // A receipt stands on its invoice, so the invoice cannot be voided while one is live.
       if (doc.type === "INVOICE" && doc.paymentId) {
         const receipts = await prisma.financialDocument.findMany({
-          where: { paymentId: doc.paymentId, type: "RECEIPT" },
+          where: { paymentId: doc.paymentId, type: "RECEIPT", status: { not: "CANCELLED" } },
           select: { documentNumber: true },
           orderBy: { documentNumber: "asc" },
         });
         if (receipts.length > 0) {
           const list = receipts.map((r) => r.documentNumber).join("، ");
           return {
-            error: `لا يمكن حذف الفاتورة ${doc.documentNumber} لوجود سند قبض صادر عليها (${list}) — احذف السند أولاً.`,
+            error: `لا يمكن إلغاء الفاتورة ${doc.documentNumber} لوجود سند قبض ساري عليها (${list}) — ألغِ السند أولاً.`,
           };
         }
       }
 
-      await prisma.financialDocument.delete({ where: { id } });
+      const now = new Date();
+
+      // A remittance voucher is the transfer itself, so voiding it returns the money to the
+      // owner's balance. Marked cancelled rather than deleted — deleting the transfer would
+      // take the voucher down with it, which is exactly what cancelling avoids. Both writes
+      // go together: a half-applied cancellation would leave the balance disagreeing with
+      // the paperwork.
+      await prisma.$transaction([
+        prisma.financialDocument.update({
+          where: { id },
+          data: { status: "CANCELLED", cancelledAt: now, cancelReason: reason?.trim() || null },
+        }),
+        ...(doc.type === "OWNER_REMITTANCE" && doc.remittanceId
+          ? [prisma.ownerRemittance.update({ where: { id: doc.remittanceId }, data: { cancelledAt: now } })]
+          : []),
+      ]);
+
+      if (doc.remittanceId) {
+        const remittance = await prisma.ownerRemittance.findUnique({
+          where: { id: doc.remittanceId },
+          select: { ownerId: true },
+        });
+        if (remittance) revalidatePath(`/owners/${remittance.ownerId}`);
+      }
+
       if (doc.contractId) revalidatePath(`/contracts/${doc.contractId}`);
       revalidatePath("/documents");
-      return { success: true };
-    },
-  },
-
-  "remittances.delete": {
-    permission: "remittances.delete",
-    describe: async ({ id }: IdPayload) => {
-      const r = await prisma.ownerRemittance.findUnique({
-        where: { id },
-        include: { owner: { select: { name: true } } },
-      });
-      return r ? `حذف سند توريد بمبلغ ${formatCurrency(r.amount)} للمالك «${r.owner.name}»` : `حذف سند التوريد ${id}`;
-    },
-    run: async ({ id }: IdPayload) => {
-      const found = await prisma.ownerRemittance.findUnique({ where: { id } });
-      if (!found) return missing("سند التوريد");
-      await prisma.ownerRemittance.delete({ where: { id } });
-      revalidatePath("/documents");
-      revalidatePath(`/owners/${found.ownerId}`);
-      revalidatePath(`/buildings/${found.buildingId}`);
-      return { success: true };
+      revalidatePath("/expenses");
+      return { success: true, message: `أُلغي المستند ${doc.documentNumber}` };
     },
   },
 

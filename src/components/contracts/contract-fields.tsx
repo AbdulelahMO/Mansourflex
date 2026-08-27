@@ -114,7 +114,8 @@ export function ContractFields({
   const [rentAmount, setRentAmount] = useState("");
   const [increasePercent, setIncreasePercent] = useState("");
   const [paymentFrequency, setPaymentFrequency] = useState("QUARTERLY");
-  const [vatRate, setVatRate] = useState("15");
+  // الإيجار السكني معفى، وهو الغالب — فتبدأ الضريبة بلا نسبة وتُختار عند الحاجة.
+  const [vatRate, setVatRate] = useState("0");
 
   const filteredUnits = useMemo(
     () => (buildingId ? units.filter((u) => u.buildingId === buildingId) : units),

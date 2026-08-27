@@ -122,6 +122,17 @@ export default async function FinancialDocumentPage(props: PageProps<"/documents
         <PrintButton />
       </div>
 
+      {/* CANCELLED_BANNER — يظهر في الشاشة وفي الطباعة معاً */}
+      {doc.status === "CANCELLED" && (
+        <div className="rounded-lg border-2 border-red-300 bg-red-50 px-4 py-3 text-center">
+          <p className="text-lg font-bold text-red-700">هذا المستند ملغى</p>
+          <p className="text-xs text-red-700">
+            أُلغي بتاريخ {doc.cancelledAt ? formatDateNumeric(doc.cancelledAt) : "—"}
+            {doc.cancelReason ? ` — ${doc.cancelReason}` : ""}
+          </p>
+        </div>
+      )}
+
       <Card className="print:border-0 print:shadow-none">
         <CardContent className="space-y-6 p-6 sm:p-8">
           <div className="flex items-start justify-between gap-4 border-b pb-4">

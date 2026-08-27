@@ -14,7 +14,8 @@ import { ContractActionsMenu } from "@/components/contracts/contract-actions-men
 import { MarkPaidDialog } from "@/components/payments/mark-paid-dialog";
 import { IssueDocumentButtons } from "@/components/contracts/document-actions";
 import { DeleteButton } from "@/components/delete-button";
-import { deleteFinancialDocument } from "@/lib/actions/documents";
+import { cancelFinancialDocument } from "@/lib/actions/documents";
+import { CancelDocumentButton } from "@/components/documents/cancel-document-button";
 
 const AMOUNT_TYPE_LABELS: Record<string, string> = {
   TOTAL: "إجمالي",
@@ -301,11 +302,10 @@ export default async function ContractDetailPage(props: PageProps<"/contracts/[i
                             <Link href={`/documents/${d.id}`}>عرض</Link>
                           </Button>
                           {canManage && (
-                            <DeleteButton
-                              action={deleteFinancialDocument.bind(null, d.id)}
-                              permission="documents.delete" title="حذف المستند"
-                              description={`سيتم حذف المستند ${d.documentNumber} نهائياً. لا يمكن التراجع عن هذا الإجراء.`}
-                              blockedReason={deleteBlockedReason(d)}
+                            <CancelDocumentButton
+                              documentNumber={d.documentNumber}
+                              cancelled={d.status === "CANCELLED"}
+                              action={cancelFinancialDocument.bind(null, d.id)}
                             />
                           )}
                         </div>

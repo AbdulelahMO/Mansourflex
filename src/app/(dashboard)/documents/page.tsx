@@ -91,10 +91,13 @@ export default async function FinancialDocumentsPage(props: PageProps<"/document
       take,
     }),
     // Totals cover the whole filtered set, not just the page in view.
-    prisma.financialDocument.findMany({ where, select: { amount: true, type: true } }),
+    prisma.financialDocument.findMany({ where, select: { amount: true, type: true, status: true } }),
   ]);
 
-  const sumOf = (t: string) => matching.filter((d) => d.type === t).reduce((s, d) => s + d.amount, 0);
+  // A cancelled document keeps its number in the list but counts for nothing.
+  const sumOf = (t: string) =>
+    matching.filter((d) => d.type === t && d.status !== "CANCELLED").reduce((s, d) => s + d.amount, 0);
+  const cancelledCount = matching.filter((d) => d.status === "CANCELLED").length;
   const collected = sumOf("RECEIPT");
   const disbursed = sumOf("PAYMENT_VOUCHER");
   const remitted = sumOf("OWNER_REMITTANCE");
@@ -119,6 +122,9 @@ export default async function FinancialDocumentsPage(props: PageProps<"/document
           <CardContent className="py-4">
             <p className="text-xs text-muted-foreground">عدد المستندات</p>
             <p className="text-lg font-bold tabular-nums">{total}</p>
+            {cancelledCount > 0 && (
+              <p className="text-xs text-muted-foreground">منها {cancelledCount} ملغى</p>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -193,7 +199,14 @@ export default async function FinancialDocumentsPage(props: PageProps<"/document
                     {documents.map((d) => (
                       <TableRow key={d.id}>
                         <TableCell className="font-medium" dir="ltr">
-                          {d.documentNumber}
+                          <span className={cn(d.status === "CANCELLED" && "text-muted-foreground line-through")}>
+                            {d.documentNumber}
+                          </span>
+                          {d.status === "CANCELLED" && (
+                            <span className="ms-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                              ملغى
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Badge variant="secondary" className={cn("border-0 font-medium", TYPE_TONES[d.type])}>
@@ -226,7 +239,14 @@ export default async function FinancialDocumentsPage(props: PageProps<"/document
                             "—"
                           )}
                         </TableCell>
-                        <TableCell className="text-left tabular-nums">{formatCurrency(d.amount)}</TableCell>
+                        <TableCell
+                          className={cn(
+                            "text-left tabular-nums",
+                            d.status === "CANCELLED" && "text-muted-foreground line-through"
+                          )}
+                        >
+                          {formatCurrency(d.amount)}
+                        </TableCell>
                         <TableCell className="text-muted-foreground">{d.issuedBy?.name ?? "—"}</TableCell>
                         <TableCell>
                           <Link

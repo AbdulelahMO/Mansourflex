@@ -15,6 +15,10 @@ import {
   ShieldCheck,
   UsersRound,
   History,
+  Home,
+  Landmark,
+  Wallet2,
+  Settings,
   type LucideIcon,
 } from "lucide-react";
 
@@ -46,4 +50,77 @@ export const navItems: NavItem[] = [
   { href: "/settings/audit", label: "سجل العمليات", icon: History, permission: "audit.view" },
   { href: "/settings/organization", label: "بيانات المنشأة", icon: Building, permission: "settings.organization" },
   { href: "/settings/integrations", label: "الربط والتكاملات", icon: Plug, permission: "settings.integrations" },
+];
+
+/**
+ * The sidebar is grouped so it stays short as the system grows: a section opens on demand,
+ * and the one holding the current page opens by itself. Items keep their own permission, so
+ * a section with nothing the user may see disappears entirely.
+ */
+export type NavGroup = {
+  key: string;
+  label: string;
+  icon: LucideIcon;
+  items: NavItem[];
+};
+
+export type NavEntry = { type: "item"; item: NavItem } | { type: "group"; group: NavGroup };
+
+const byHref = new Map(navItems.map((i) => [i.href, i]));
+const item = (href: string) => byHref.get(href)!;
+
+export const navEntries: NavEntry[] = [
+  { type: "item", item: item("/") },
+  {
+    type: "group",
+    group: {
+      key: "properties",
+      label: "العقارات",
+      icon: Landmark,
+      items: [item("/buildings"), item("/units")],
+    },
+  },
+  {
+    type: "group",
+    group: {
+      key: "owners",
+      label: "الملاك",
+      icon: Users,
+      items: [item("/owners"), item("/agreements")],
+    },
+  },
+  {
+    type: "group",
+    group: {
+      key: "leasing",
+      label: "الإيجارات",
+      icon: Home,
+      items: [item("/tenants"), item("/contracts")],
+    },
+  },
+  {
+    type: "group",
+    group: {
+      key: "finance",
+      label: "المالية",
+      icon: Wallet2,
+      items: [item("/payments"), item("/expenses"), item("/documents")],
+    },
+  },
+  { type: "item", item: item("/notifications") },
+  {
+    type: "group",
+    group: {
+      key: "admin",
+      label: "الإدارة",
+      icon: Settings,
+      items: [
+        item("/approvals"),
+        item("/settings/employees"),
+        item("/settings/audit"),
+        item("/settings/organization"),
+        item("/settings/integrations"),
+      ],
+    },
+  },
 ];

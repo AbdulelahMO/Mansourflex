@@ -9,6 +9,8 @@ export type StatRowItem = {
   tone?: "default" | "danger" | "success";
   iconSrc?: string;
   href?: string;
+  /** Replaces the label line with a control — keeps the cell's height unchanged. */
+  labelControl?: React.ReactNode;
 };
 
 export function RichStatCard({
@@ -74,16 +76,18 @@ export function RichStatCard({
                     >
                       {item.value}
                     </p>
-                    <p className="flex items-center justify-center gap-1 text-[11px] text-muted-foreground">
-                      {item.iconSrc && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={item.iconSrc} alt="" className="size-4.5 object-contain" />
-                      )}
-                      {item.label}
-                    </p>
+                    {item.labelControl ?? (
+                      <p className="flex items-center justify-center gap-1 text-[11px] text-muted-foreground">
+                        {item.iconSrc && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={item.iconSrc} alt="" className="size-4.5 object-contain" />
+                        )}
+                        {item.label}
+                      </p>
+                    )}
                   </>
                 );
-                return item.href ? (
+                return item.href && !item.labelControl ? (
                   <Link key={j} href={item.href} className="flex-1 rounded-lg py-2 text-center transition-opacity hover:opacity-70">
                     {cellContent}
                   </Link>

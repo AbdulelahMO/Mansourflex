@@ -5,11 +5,14 @@ export function BrandMark({
   logoUrl,
   iconClassName = "size-6",
   textClassName = "font-bold",
+  clamp = true,
 }: {
   name: string;
   logoUrl?: string | null;
   iconClassName?: string;
   textClassName?: string;
+  /** Long names get two lines instead of a cut — this is the only place the name appears. */
+  clamp?: boolean;
 }) {
   return (
     <>
@@ -19,7 +22,7 @@ export function BrandMark({
       ) : (
         <Building2 className={`${iconClassName} shrink-0 text-primary`} />
       )}
-      <span className={`truncate ${textClassName}`}>{name}</span>
+      <span className={`${clamp ? "line-clamp-2 leading-snug" : "truncate"} ${textClassName}`}>{name}</span>
     </>
   );
 }

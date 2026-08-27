@@ -92,7 +92,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     permissions: [
       { key: "documents.view", label: "عرض المستندات" },
       { key: "documents.issue", label: "إصدار فاتورة أو سند" },
-      { key: "documents.delete", label: "حذف مستند مالي", sensitive: true },
+      { key: "documents.cancel", label: "إلغاء مستند مالي", sensitive: true },
     ],
   },
   {
@@ -112,7 +112,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     permissions: [
       { key: "statements.view", label: "عرض كشف حساب المالك" },
       { key: "remittances.create", label: "تسجيل توريد للمالك" },
-      { key: "remittances.delete", label: "حذف سند توريد", sensitive: true },
+
     ],
   },
   {

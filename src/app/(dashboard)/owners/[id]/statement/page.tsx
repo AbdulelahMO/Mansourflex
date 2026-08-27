@@ -8,7 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PrintButton } from "@/components/contracts/print-button";
 import { DeleteButton } from "@/components/delete-button";
 import { RemittanceDialog } from "@/components/owners/remittance-dialog";
-import { deleteRemittance } from "@/lib/actions/remittances";
+import { cancelRemittance } from "@/lib/actions/remittances";
+import { CancelDocumentButton } from "@/components/documents/cancel-document-button";
 import { ownerAccount } from "@/lib/owner-account";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -109,7 +110,7 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
               // eslint-disable-next-line @next/next/no-img-element
               <img src={`/api/files/${org.logoUrl}`} alt="" className="mx-auto h-12 object-contain" />
             )}
-            <h1 className="text-lg font-bold">كشف حساب مالك</h1>
+            <h1 className="text-lg font-bold">كشف حساب المالك</h1>
             <p className="text-sm text-muted-foreground">
               {owner.name} · من {formatDate(from)} إلى {formatDate(toRaw)}
             </p>
@@ -224,6 +225,11 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
                   {remittances.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell dir="ltr" className="font-medium">
+                        {r.cancelledAt && (
+                          <span className="me-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                            ملغى
+                          </span>
+                        )}
                         {r.documents[0] ? (
                           <Link href={`/documents/${r.documents[0].id}`} className="hover:underline">
                             {r.documents[0].documentNumber}
@@ -236,13 +242,18 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
                       <TableCell>{r.building.name}</TableCell>
                       <TableCell>{r.method ?? "—"}</TableCell>
                       <TableCell dir="ltr">{r.reference ?? "—"}</TableCell>
-                      <TableCell className="text-left tabular-nums">{formatCurrency(r.amount)}</TableCell>
+                      <TableCell
+                        className={cn("text-left tabular-nums", r.cancelledAt && "text-muted-foreground line-through")}
+                      >
+                        {formatCurrency(r.amount)}
+                      </TableCell>
                       <TableCell className="text-muted-foreground">{r.createdBy?.name ?? "—"}</TableCell>
                       <TableCell>
-                        <DeleteButton
-                          action={deleteRemittance.bind(null, r.id)}
-                          permission="remittances.delete" title="حذف سند التوريد"
-                          description="سيُحذف السند والتحويل المسجّل معه، ويعود المبلغ إلى رصيد المالك."
+                        <CancelDocumentButton
+                          documentNumber={r.documents[0]?.documentNumber ?? ""}
+                          cancelled={!!r.cancelledAt}
+                          action={cancelRemittance.bind(null, r.id)}
+                          description="يُلغى سند التوريد ويعود مبلغه إلى رصيد المالك، ويبقى السند برقمه مختوماً بـ«ملغى»."
                         />
                       </TableCell>
                     </TableRow>

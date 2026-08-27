@@ -60,7 +60,7 @@ export async function createDocumentWithNumber(
  */
 export async function unreceiptedAmount(paymentId: string, paidAmount: number | null) {
   const receipts = await prisma.financialDocument.findMany({
-    where: { paymentId, type: "RECEIPT" },
+    where: { paymentId, type: "RECEIPT", status: { not: "CANCELLED" } },
     select: { amount: true },
   });
   const acknowledged = receipts.reduce((sum, r) => sum + r.amount, 0);
@@ -83,7 +83,7 @@ export async function issueReceiptForPayment(paymentId: string, issuedById?: str
 
   // A receipt acknowledges payment against an invoice, so the invoice has to come first.
   const invoice = await prisma.financialDocument.findFirst({
-    where: { paymentId, type: "INVOICE" },
+    where: { paymentId, type: "INVOICE", status: { not: "CANCELLED" } },
     select: { id: true },
   });
   if (!invoice) return { ok: false, error: "لا يمكن إصدار سند قبض قبل إصدار فاتورة لهذه الدفعة" };
@@ -125,7 +125,7 @@ export async function issueVoucherForExpense(expenseId: string, issuedById?: str
   if (!expense.paidDate) return { ok: false as const, error: "لا يصدر سند صرف لمصروف لم يُسدَّد بعد" };
 
   const existing = await prisma.financialDocument.findFirst({
-    where: { expenseId, type: "PAYMENT_VOUCHER" },
+    where: { expenseId, type: "PAYMENT_VOUCHER", status: { not: "CANCELLED" } },
     select: { documentNumber: true },
   });
   if (existing) {

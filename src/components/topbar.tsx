@@ -7,17 +7,21 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { SidebarNav } from "@/components/sidebar-nav";
 import { UserMenu } from "@/components/user-menu";
 import { BrandMark } from "@/components/brand-mark";
+import { ApprovalsIndicator } from "@/components/approvals-indicator";
 
 export function Topbar({
   name,
   role,
   orgName,
   orgLogoUrl,
+  pendingApprovals,
 }: {
   name: string;
   role: "ADMIN" | "OWNER" | "EMPLOYEE";
   orgName: string;
   orgLogoUrl?: string | null;
+  /** Null for an owner, who has no part in approvals. */
+  pendingApprovals?: { count: number; isDecider: boolean } | null;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -40,11 +44,13 @@ export function Topbar({
       </Sheet>
 
       <div className="flex items-center gap-2 md:hidden">
-        <BrandMark name={orgName} logoUrl={orgLogoUrl} iconClassName="size-5" textClassName="text-sm font-bold" />
+        <BrandMark name={orgName} logoUrl={orgLogoUrl} iconClassName="size-5" textClassName="text-sm font-bold" clamp={false} />
       </div>
 
       <div className="flex-1" />
-      <span className="hidden truncate text-sm font-medium text-muted-foreground md:inline max-w-48">{orgName}</span>
+      {pendingApprovals && (
+        <ApprovalsIndicator count={pendingApprovals.count} isDecider={pendingApprovals.isDecider} />
+      )}
       <UserMenu name={name} role={role} />
     </header>
   );

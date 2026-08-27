@@ -79,6 +79,17 @@ export async function createRemittance(_prev: ActionState, formData: FormData): 
 }
 
 /** Reverses a transfer entered by mistake; its voucher goes with it. */
-export async function deleteRemittance(id: string, reason?: string): Promise<ActionState> {
-  return runSensitive("remittances.delete", { id }, reason);
+/**
+ * A remittance is undone by voiding its voucher: the document is stamped cancelled and the
+ * amount returns to the owner's balance, so paperwork and money stay in step.
+ */
+export async function cancelRemittance(id: string, reason?: string): Promise<ActionState> {
+  const doc = await prisma.financialDocument.findFirst({
+    where: { remittanceId: id, type: "OWNER_REMITTANCE", status: { not: "CANCELLED" } },
+    select: { id: true },
+  });
+  if (!doc) return { error: "سند التوريد غير موجود أو سبق إلغاؤه" };
+
+
+  return runSensitive("documents.cancel", { id: doc.id, reason }, reason);
 }
