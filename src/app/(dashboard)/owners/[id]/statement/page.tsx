@@ -15,12 +15,21 @@ import { ownerAccount } from "@/lib/owner-account";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-/** Defaults to the current month — the period an owner statement is usually run for. */
+/** Formats a calendar date without letting the timezone shift it a day. */
+function toInput(year: number, month: number, day: number) {
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/**
+ * Defaults to the current year: a month-to-date statement is often empty — rent is collected
+ * quarterly or annually as often as monthly — and an empty statement reads like a fault.
+ */
 function defaultPeriod() {
   const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1);
-  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+  return {
+    from: toInput(now.getFullYear(), 0, 1),
+    to: toInput(now.getFullYear(), 11, 31),
+  };
 }
 
 function parseDate(value: unknown, fallback: string) {
@@ -66,6 +75,7 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
 
   const fromValue = from.toISOString().slice(0, 10);
   const toValue = toRaw.toISOString().slice(0, 10);
+
 
   return (
     <div className="space-y-4">
@@ -128,7 +138,10 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
               <TableHeader>
                 <TableRow>
                   <TableHead>العقار</TableHead>
+                  <TableHead className="text-left">الإشغال</TableHead>
+                  <TableHead className="text-left">إيراد الفترة</TableHead>
                   <TableHead className="text-left">المحصّل</TableHead>
+                  <TableHead className="text-left">المتأخر</TableHead>
                   <TableHead className="text-left">المصروفات</TableHead>
                   <TableHead className="text-left">صافي المحصّل</TableHead>
                   <TableHead className="text-left">العمولة</TableHead>
@@ -150,7 +163,21 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
                         {l.commissionPercent > 0 ? `عمولة ${l.commissionPercent}%` : "بلا اتفاقية سارية"}
                       </span>
                     </TableCell>
+                    <TableCell className="text-left">
+                      <span className="font-medium tabular-nums">
+                        {l.units ? Math.round((l.occupiedUnits / l.units) * 100) : 0}%
+                      </span>
+                      <span className="block text-xs text-muted-foreground tabular-nums">
+                        {l.occupiedUnits} من {l.units}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-left tabular-nums">{formatCurrency(l.billed)}</TableCell>
                     <TableCell className="text-left tabular-nums">{formatCurrency(l.collected)}</TableCell>
+                    <TableCell
+                      className={cn("text-left tabular-nums", l.outstanding > 0 ? "text-red-600" : "text-muted-foreground")}
+                    >
+                      {formatCurrency(l.outstanding)}
+                    </TableCell>
                     <TableCell className="text-left tabular-nums text-muted-foreground">
                       {formatCurrency(l.ownerExpenses)}
                     </TableCell>
@@ -181,7 +208,21 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
                 ))}
                 <TableRow className="bg-muted/60 font-bold">
                   <TableCell>الإجمالي</TableCell>
+                  <TableCell className="text-left">
+                    <span className="tabular-nums">
+                      {totals.units ? Math.round((totals.occupiedUnits / totals.units) * 100) : 0}%
+                    </span>
+                    <span className="block text-xs font-normal text-muted-foreground tabular-nums">
+                      {totals.occupiedUnits} من {totals.units}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-left tabular-nums">{formatCurrency(totals.billed)}</TableCell>
                   <TableCell className="text-left tabular-nums">{formatCurrency(totals.collected)}</TableCell>
+                  <TableCell
+                    className={cn("text-left tabular-nums", totals.outstanding > 0 && "text-red-600")}
+                  >
+                    {formatCurrency(totals.outstanding)}
+                  </TableCell>
                   <TableCell className="text-left tabular-nums">{formatCurrency(totals.ownerExpenses)}</TableCell>
                   <TableCell className="text-left tabular-nums">{formatCurrency(totals.netCollected)}</TableCell>
                   <TableCell className="text-left tabular-nums">{formatCurrency(totals.commission)}</TableCell>
@@ -199,9 +240,17 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
             </Table>
           </div>
 
+          {totals.collected === 0 && totals.ownerExpenses === 0 && totals.remitted === 0 && (
+            <p className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 print:hidden">
+              لا توجد حركة مالية في هذه الفترة — لا تحصيل ولا مصروفات ولا توريد. وسّع الفترة أعلاه إن كان
+              التحصيل ربع سنوي أو سنوياً.
+            </p>
+          )}
+
           <p className="text-xs leading-6 text-muted-foreground">
-            «قبضه المالك» هو ما استلمه المالك مباشرة من المستأجرين خلال الفترة، ويُخصم من مستحقه لأنه وصله فعلاً،
-            وتبقى عمولة الإدارة مستحقة عليه. و«الرصيد» بالسالب يعني أن المالك مدين لمدير الأملاك.
+            «الإشغال» عدد الوحدات المؤجرة من إجمالي وحدات العقار، و«إيراد الفترة» هو ما تستحقه عقود هذه الفترة، و«المحصّل» ما وصل فعلاً منه ومن فترات سابقة، و«المتأخر» ما
+            حلّ موعده ولم يُحصَّل بعد. و«قبضه المالك» هو ما استلمه المالك مباشرة من المستأجرين فيُخصم من مستحقه لأنه
+            وصله فعلاً، وتبقى عمولة الإدارة مستحقة عليه. و«الرصيد» بالسالب يعني أن المالك مدين لمدير الأملاك.
           </p>
         </CardContent>
       </Card>

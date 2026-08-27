@@ -6,6 +6,13 @@ export type Period = { from: Date; to: Date };
 export type BuildingAccount = {
   buildingId: string;
   buildingName: string;
+  /** Units in the property, and how many are let — occupancy as a fact, not a projection. */
+  units: number;
+  occupiedUnits: number;
+  /** Rent the contracts call for in this period — what the property should produce. */
+  billed: number;
+  /** Of that, what has fallen due and is still short. */
+  outstanding: number;
   /** Everything collected in the period, whoever received it. */
   collected: number;
   /** The part the owner collected directly — already in their hands. */
@@ -37,7 +44,23 @@ export async function buildingAccount(
 ): Promise<BuildingAccount> {
   const window = { gte: period.from, lte: period.to };
 
-  const [allAgg, ownerAgg, expenseAgg, remittanceAgg] = await Promise.all([
+  const [unitCount, occupiedCount, billedAgg, dueShort, allAgg, ownerAgg, expenseAgg, remittanceAgg] = await Promise.all([
+    prisma.unit.count({ where: { buildingId } }),
+    prisma.unit.count({ where: { buildingId, status: "OCCUPIED" } }),
+    // Billed by the contracts for this period, collected or not.
+    prisma.payment.aggregate({
+      where: { contract: { unit: { buildingId } }, dueDate: window },
+      _sum: { amount: true },
+    }),
+    // Instalments already due within the period and not settled in full.
+    prisma.payment.findMany({
+      where: {
+        contract: { unit: { buildingId } },
+        dueDate: { gte: period.from, lte: new Date(Math.min(period.to.getTime(), Date.now())) },
+        status: { not: "PAID" },
+      },
+      select: { amount: true, paidAmount: true },
+    }),
     prisma.payment.aggregate({
       where: { contract: { unit: { buildingId } }, paidDate: window },
       _sum: { paidAmount: true },
@@ -57,6 +80,8 @@ export async function buildingAccount(
     }),
   ]);
 
+  const billed = billedAgg._sum.amount ?? 0;
+  const outstanding = dueShort.reduce((s, p) => s + Math.max(0, p.amount - (p.paidAmount ?? 0)), 0);
   const collected = allAgg._sum.paidAmount ?? 0;
   const collectedByOwner = ownerAgg._sum.paidAmount ?? 0;
   const ownerExpenses = expenseAgg._sum.amount ?? 0;
@@ -69,6 +94,10 @@ export async function buildingAccount(
   return {
     buildingId,
     buildingName,
+    units: unitCount,
+    occupiedUnits: occupiedCount,
+    billed,
+    outstanding,
     collected,
     collectedByOwner,
     ownerExpenses,
@@ -97,6 +126,10 @@ export async function ownerAccount(ownerId: string, period: Period) {
 
   const totals = lines.reduce(
     (acc, l) => ({
+      units: acc.units + l.units,
+      occupiedUnits: acc.occupiedUnits + l.occupiedUnits,
+      billed: acc.billed + l.billed,
+      outstanding: acc.outstanding + l.outstanding,
       collected: acc.collected + l.collected,
       collectedByOwner: acc.collectedByOwner + l.collectedByOwner,
       ownerExpenses: acc.ownerExpenses + l.ownerExpenses,
@@ -107,6 +140,10 @@ export async function ownerAccount(ownerId: string, period: Period) {
       balance: acc.balance + l.balance,
     }),
     {
+      units: 0,
+      occupiedUnits: 0,
+      billed: 0,
+      outstanding: 0,
       collected: 0,
       collectedByOwner: 0,
       ownerExpenses: 0,

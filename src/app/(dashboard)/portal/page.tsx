@@ -147,7 +147,10 @@ export default async function OwnerPortalPage(props: PageProps<"/portal">) {
               <TableHeader>
                 <TableRow>
                   <TableHead>العقار</TableHead>
+                  <TableHead className="text-left">الإشغال</TableHead>
+                  <TableHead className="text-left">إيراد الفترة</TableHead>
                   <TableHead className="text-left">المحصّل</TableHead>
+                  <TableHead className="text-left">المتأخر</TableHead>
                   <TableHead className="text-left">المصروفات</TableHead>
                   <TableHead className="text-left">عمولة الإدارة</TableHead>
                   <TableHead className="text-left">مستحقك</TableHead>
@@ -164,7 +167,21 @@ export default async function OwnerPortalPage(props: PageProps<"/portal">) {
                         {a.commissionPercent > 0 ? `عمولة ${a.commissionPercent}%` : "بلا اتفاقية سارية"}
                       </span>
                     </TableCell>
+                    <TableCell className="text-left">
+                      <span className="font-medium tabular-nums">
+                        {a.units ? Math.round((a.occupiedUnits / a.units) * 100) : 0}%
+                      </span>
+                      <span className="block text-xs text-muted-foreground tabular-nums">
+                        {a.occupiedUnits} من {a.units}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-left tabular-nums">{formatCurrency(a.billed)}</TableCell>
                     <TableCell className="text-left tabular-nums">{formatCurrency(a.collected)}</TableCell>
+                    <TableCell
+                      className={cn("text-left tabular-nums", a.outstanding > 0 ? "text-red-600" : "text-muted-foreground")}
+                    >
+                      {formatCurrency(a.outstanding)}
+                    </TableCell>
                     <TableCell className="text-left tabular-nums text-muted-foreground">
                       {formatCurrency(a.ownerExpenses)}
                     </TableCell>
