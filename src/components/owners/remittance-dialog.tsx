@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,6 +27,12 @@ export function RemittanceDialog({
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const defaultAmount = suggestedAmount > 0 ? Math.round(suggestedAmount * 100) / 100 : "";
+
+  // Each property is remitted on its own, so a transfer larger than what this one earned is
+  // almost always a lump sum entered against a single building — the mistake this catches.
+  const [amount, setAmount] = useState(String(defaultAmount));
+  const [acknowledged, setAcknowledged] = useState(false);
+  const exceeds = Number(amount || 0) > Math.round(suggestedAmount * 100) / 100 + 0.5;
 
   return (
     <FormDialog
@@ -54,7 +61,8 @@ export function RemittanceDialog({
             step="0.01"
             min="0.01"
             required
-            defaultValue={defaultAmount}
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
           />
         </div>
         <div className="space-y-1.5">
@@ -92,8 +100,28 @@ export function RemittanceDialog({
         <Textarea id={`notes-${buildingId}`} name="notes" />
       </div>
 
+      {exceeds && (
+        <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          <p>
+            المبلغ يتجاوز مستحق هذا العقار ({formatCurrency(suggestedAmount)}). لكل عقار حسابه وتوريده المستقل —
+            فإن كان هذا تحويلاً يشمل عقارات أخرى، سجّل لكل عقار سنده على حدة.
+          </p>
+          <label className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              name="acknowledge"
+              checked={acknowledged}
+              onChange={(e) => setAcknowledged(e.target.checked)}
+              className="mt-0.5 size-4 accent-primary"
+              required
+            />
+            <span>أعلم بذلك وأريد تسجيل المبلغ كاملاً على هذا العقار</span>
+          </label>
+        </div>
+      )}
+
       <p className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
-        يصدر سند توريد تلقائياً بالمبلغ، ويظهر في المستندات المالية. يمكنك حذفه لاحقاً إن سُجِّل بالخطأ.
+        يصدر سند توريد تلقائياً بالمبلغ، ويظهر في المستندات المالية. ويمكن إلغاؤه لاحقاً فيعود المبلغ للرصيد.
       </p>
     </FormDialog>
   );

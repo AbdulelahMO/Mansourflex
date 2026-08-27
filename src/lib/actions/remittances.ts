@@ -5,6 +5,9 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requirePermission, recordAudit } from "@/lib/authz";
 import { createDocumentWithNumber } from "@/lib/documents-core";
+import { buildingAccount } from "@/lib/owner-account";
+import { commissionForBuilding } from "@/lib/commission";
+import { formatCurrency } from "@/lib/format";
 import { runSensitive } from "@/lib/approvals";
 import type { ActionState } from "@/lib/types";
 
@@ -43,6 +46,20 @@ export async function createRemittance(_prev: ActionState, formData: FormData): 
 
   const remittedAt = new Date(d.remittedAt);
   if (Number.isNaN(remittedAt.getTime())) return { error: "تاريخ التحويل غير صحيح" };
+
+  // Each property carries its own account and its own transfer. A remittance beyond what
+  // this one owes is nearly always a lump sum meant for several properties, so it is
+  // refused unless whoever records it says otherwise.
+  if (formData.get("acknowledge") !== "on") {
+    const terms = await commissionForBuilding(building.id);
+    const account = await buildingAccount(building.id, "", { from: new Date(0), to: new Date() }, terms?.percent ?? 0);
+    if (d.amount > account.balance + 0.5) {
+      return {
+        error: `المبلغ يتجاوز مستحق هذا العقار (${formatCurrency(account.balance)}). سجّل لكل عقار سنده على حدة، أو أكّد المتابعة.`,
+        needsAcknowledge: true,
+      };
+    }
+  }
 
   const remittance = await prisma.ownerRemittance.create({
     data: {
