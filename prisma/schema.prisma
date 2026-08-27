@@ -1,0 +1,761 @@
+// Prisma schema - نظام إدارة الأملاك العقارية
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN // مدير النظام — صلاحية كاملة غير قابلة للتقييد
+  OWNER // مالك العقار — بوابة المالك
+  EMPLOYEE // موظف — صلاحياته من دوره واستثناءاته
+}
+
+/// حالة الصلاحية: تنفيذ مباشر، أو طلب يحتاج موافقة المدير، أو منع
+enum PermissionState {
+  ALLOW
+  APPROVE
+  DENY
+}
+
+enum ApprovalStatus {
+  PENDING // بانتظار قرار المدير
+  APPROVED // وُوفق عليه ونُفِّذ
+  REJECTED // رُفض
+  EXPIRED // مضت مدته دون قرار
+  FAILED // وُوفق عليه لكن تعذّر تنفيذه
+}
+
+enum UnitStatus {
+  VACANT // شاغرة
+  OCCUPIED // مؤجرة
+  MAINTENANCE // تحت الصيانة
+}
+
+enum ContractStatus {
+  ACTIVE // ساري
+  EXPIRING_SOON // قارب على الانتهاء
+  EXPIRED // منتهي
+  TERMINATED // مفسوخ
+}
+
+enum RentAmountType {
+  TOTAL // إجمالي قيمة العقد
+  ANNUAL // القيمة السنوية
+  INCREASING // متزايد سنوياً بنسبة محددة
+}
+
+enum PaymentFrequency {
+  MONTHLY
+  QUARTERLY
+  SEMI_ANNUAL
+  ANNUAL
+  ONE_TIME
+}
+
+enum PaymentRecipient {
+  OPERATOR // المشغل
+  OWNER // المالك
+}
+
+enum PaymentStatus {
+  PENDING // مستحق
+  PAID // مدفوع
+  OVERDUE // متأخر
+  PARTIAL // مدفوع جزئياً
+}
+
+enum NotificationType {
+  CONTRACT_EXPIRY
+  PAYMENT_DUE
+  PAYMENT_OVERDUE
+  CUSTOM
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum IntegrationType {
+  PAYMENT_GATEWAY
+  SMS
+  WHATSAPP
+  EMAIL
+  WEBHOOK
+  OTHER
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(OWNER)
+  /// رقم هوية الموظف — يربط الحساب بشخص بعينه ولا يتكرّر
+  nationalId   String?  @unique
+  phone        String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  staffRoleId String?
+  staffRole   StaffRole? @relation(fields: [staffRoleId], references: [id], onDelete: SetNull)
+
+  permissions       UserPermission[] // استثناءات فردية فوق الدور
+  approvalsRequested ApprovalRequest[] @relation("ApprovalRequester")
+  approvalsDecided   ApprovalRequest[] @relation("ApprovalDecider")
+  contractsCreated   Contract[]          @relation("ContractCreator")
+  expensesCreated    Expense[]           @relation("ExpenseCreator")
+  documentsIssued    FinancialDocument[] @relation("DocumentIssuer")
+  remittancesCreated OwnerRemittance[]   @relation("RemittanceCreator")
+  paymentsCollected  Payment[]           @relation("PaymentCollector")
+  auditLogs         AuditLog[]
+
+  owner         Owner?
+  notifications Notification[]
+
+  @@map("users")
+}
+
+model Owner {
+  id        String   @id @default(cuid())
+  name      String
+  ownerType String? // فرد / شركة - مؤسسة
+  phone     String?
+  email     String?
+  nationalId String?
+  taxNumber String? // الرقم الضريبي - إن وجد تصدر الفواتير كفواتير ضريبية، وإلا فواتير عادية
+  unifiedNumber String? // الرقم الموحد (يبدأ بـ700) - للملاك من الشركات
+  representativeName       String? // اسم ممثل الشركة / المؤسسة
+  representativeNationalId String?
+  representativePhone      String?
+  representativeEmail      String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId    String?  @unique
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  remittances OwnerRemittance[] // ما وُرِّد له من مستحقاته
+  buildings  Building[]
+  agreements ManagementAgreement[]
+
+  @@map("owners")
+}
+
+model Building {
+  id        String   @id @default(cuid())
+  name      String
+  nameEn    String?
+  city      String?
+  district  String?
+  address   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // تصنيف العقار
+  sector       String? // قطاع العقار
+  usageType    String? // نوع الاستخدام
+  propertyType String? // نوع العقار
+  propertyNumber String? // رقم العقار
+  complexName  String? // المجمع
+
+  // العنوان الوطني
+  country      String?
+  region       String?
+  streetName   String?
+  postalCode   String?
+  buildingNumber String? // رقم المبنى بالعنوان الوطني
+  additionalNumber String? // الرقم الإضافي
+  plotNumber   String? // رقم قطعة العقار
+  blockNumber  String? // رقم بلوك العقار
+  latitude     Float?
+  longitude    Float?
+
+  // صك الملكية
+  deedType     String?
+  deedNumber   String?
+  deedIssueDate DateTime?
+  deedFileUrl  String?
+
+  // تفاصيل إنشائية
+  description  String? // وصف العقار ومحتوياته
+  shopsCount     Int? // عدد المحلات
+  apartmentsCount Int? // عدد الشقق
+  elevatorsCount Int? // عدد المصاعد
+  areaSqm      Float?
+  constructionDate DateTime?
+  floorsCount  Int?
+  unitsPerFloor Int?
+
+
+  ownerId   String
+  owner     Owner    @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+
+  units     Unit[]
+  contacts  BuildingContact[]
+  remittances OwnerRemittance[] // توريدات مستحقات المالك عن هذا المبنى
+  /// عقار انتهت إدارته: يختفي من القوائم العاملة وتبقى سجلاته كاملة
+  archivedAt DateTime?
+
+  photos    BuildingPhoto[] // معرض صور العقار
+  meters    BuildingMeter[]
+  agreementLines AgreementBuilding[]
+  expenses  Expense[]
+
+  @@map("buildings")
+}
+
+enum AgreementStatus {
+  ACTIVE // سارية
+  EXPIRED // منتهية
+  TERMINATED // مفسوخة
+}
+
+enum ExpenseCategory {
+  MAINTENANCE // صيانة
+  PLUMBING // سباكة
+  RENOVATION // ترميم
+  ELECTRICITY // كهرباء
+  WATER // ماء
+  CLEANING // نظافة
+  SECURITY // أمن
+  GOVERNMENT_FEES // رسوم حكومية
+  INSURANCE // تأمين
+  OTHER // أخرى
+}
+
+enum ExpenseBearer {
+  OWNER // على المالك — يُخصم من محصّله قبل احتساب العمولة
+  TENANT // على المستأجر
+  OPERATOR // على مدير الأملاك
+}
+
+/// مصروف على مبنى أو على وحدة بعينه. يُخصم من تسوية المالك فقط متى كان على المالك
+/// وله تاريخ صرف — فالمصروف غير المدفوع يُتابَع ولا يُخصم.
+model Expense {
+  id          String          @id @default(cuid())
+  category    ExpenseCategory
+  description String
+  amount      Float
+  vendor      String? // المورّد
+
+  expenseDate DateTime // تاريخ الفاتورة
+  paidDate    DateTime? // تاريخ الصرف — فارغ يعني غير مدفوع، وهو ما يحدد فترة الخصم
+
+  bearer  ExpenseBearer @default(OWNER)
+  fileUrl String? // فاتورة المورّد
+  notes   String?
+
+  buildingId String
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  unitId String? // فارغ يعني مصروفاً عاماً على المبنى
+  unit   Unit?   @relation(fields: [unitId], references: [id], onDelete: SetNull)
+
+  createdById String?
+  createdBy   User?   @relation("ExpenseCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  documents FinancialDocument[] // سندات الصرف الصادرة عند السداد
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("expenses")
+}
+
+/// اتفاقية إدارة الأملاك الموقّعة مع المالك: شروطها وواجباتها وصلاحياتها على مستوى الوثيقة،
+/// ونسبة العمولة على مستوى كل مبنى مشمول (انظر AgreementBuilding).
+model ManagementAgreement {
+  id              String          @id @default(cuid())
+  agreementNumber String          @unique
+  startDate       DateTime
+  endDate         DateTime
+  status          AgreementStatus @default(ACTIVE)
+
+  // التوقيع — قد يسبق تاريخ بداية السريان
+  signedAt    DateTime?
+  signedPlace String?
+
+  terms  String? // الشروط
+  duties String? // واجبات مدير الأملاك
+  notes  String?
+
+  // الصلاحيات الممنوحة لمدير الأملاك — مهيكلة ليتمكن النظام من الاحتكام إليها لاحقاً
+  canSignContracts    Boolean @default(false) // توقيع عقود الإيجار نيابة عن المالك
+  canCollectRent      Boolean @default(false) // تحصيل الإيجارات
+  canMaintain         Boolean @default(false) // تنفيذ الصيانة
+  maintenanceLimit    Float? // حد الصيانة دون الرجوع للمالك
+  canLitigate         Boolean @default(false) // رفع الدعاوى والإخلاء عبر ناجز
+  canNegotiateRenewal Boolean @default(false) // التفاوض على الإيجار والتجديد
+  otherAuthorities    String?
+
+  fileUrl String? // مرفق الاتفاقية الموقّعة
+
+  ownerId String
+  owner   Owner  @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+
+  buildings  AgreementBuilding[]
+  settlement AgreementSettlement?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("management_agreements")
+}
+
+/// كشف التصفية النهائية عند إنهاء الاتفاقية. الأرقام مثبّتة لحظة الإنهاء ولا تُعاد
+/// حسابها بعدها — فتسجيل دفعة أو مصروف بتاريخ قديم لاحقاً لا يغيّر ما اتُّفق عليه.
+model AgreementSettlement {
+  id           String   @id @default(cuid())
+  settledAt    DateTime // تاريخ إنهاء الاتفاقية والتصفية
+  periodFrom   DateTime
+  periodTo     DateTime
+
+  collected        Float // المحصّل خلال الفترة
+  ownerExpenses    Float // مصروفات على المالك مدفوعة خلال الفترة
+  netCollected     Float // المحصّل - مصروفات المالك
+  commissionPercent Float
+  commission       Float // عمولة الإدارة
+  operatorExpenses Float // مصروفات تحمّلها المشغل
+  netCommission    Float // العمولة - مصروفات المشغل
+  payableToOwner   Float // المستحق توريده للمالك
+
+  // بنود معلّقة وقت التصفية — تُوثّق ولا تدخل الحساب
+  pendingArrears  Float @default(0) // متأخرات لم تُحصّل
+  pendingExpenses Float @default(0) // مصروفات لم تُدفع
+
+  /// تاريخ نهاية الاتفاقية قبل التصفية — يُستعاد إذا أُلغيت التصفية
+  previousEndDate DateTime?
+
+  notes String?
+
+  agreementId String              @unique
+  agreement   ManagementAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@map("agreement_settlements")
+}
+
+/// بند الاتفاقية: المبنى المشمول ونسبة العمولة المتفق عليها عليه.
+model AgreementBuilding {
+  id                String          @id @default(cuid())
+  commissionPercent Float  @default(0) // % من صافي المحصّل بعد المصروفات
+
+  agreementId String
+  agreement   ManagementAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+
+  buildingId String
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  @@unique([agreementId, buildingId])
+  @@map("agreement_buildings")
+}
+
+model BuildingContact {
+  id        String   @id @default(cuid())
+  name      String
+  role      String?
+  phone     String?
+  note      String?
+  createdAt DateTime @default(now())
+
+  buildingId String
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  @@map("building_contacts")
+}
+
+enum MeterType {
+  ELECTRICITY
+  WATER
+}
+
+model BuildingMeter {
+  id                 String    @id @default(cuid())
+  type               MeterType
+  meterNumber        String?
+  subscriptionNumber String?
+  note               String?
+  createdAt          DateTime  @default(now())
+
+  buildingId String
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  @@map("building_meters")
+}
+
+model Unit {
+  id          String     @id @default(cuid())
+  unitNumber  String
+  floor       String?
+  unitType    String? // سكني / تجاري / مكتب ...
+  areaSqm     Float?
+  bedrooms    Int?
+  bathrooms   Int?
+  rentAmount  Float?
+  status      UnitStatus @default(VACANT)
+  notes       String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  buildingId  String
+  building    Building   @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  contracts   Contract[]
+  expenses    Expense[]
+
+  @@unique([buildingId, unitNumber])
+  @@map("units")
+}
+
+model Tenant {
+  id         String   @id @default(cuid())
+  name       String
+  tenantType String? // فرد / شركة - مؤسسة
+  phone      String?
+  email      String?
+  nationalId String?
+  commercialRegister String? // السجل التجاري - للمستأجرين من الشركات
+  unifiedNumber String? // الرقم الموحد (يبدأ بـ700) - للمستأجرين من الشركات
+  representativeName       String? // اسم ممثل الشركة / المؤسسة
+  representativeNationalId String?
+  representativePhone      String?
+  representativeEmail      String?
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  contracts  Contract[]
+
+  @@map("tenants")
+}
+
+model Contract {
+  id              String           @id @default(cuid())
+  contractNumber  String           @unique
+  ejarContractNumber String? // رقم عقد إيجار (منصة إيجار)
+  startDate       DateTime
+  endDate         DateTime
+  rentAmount      Float
+  amountType      RentAmountType   @default(ANNUAL)
+  increasePercent Float? // نسبة الزيادة السنوية (يُستخدم فقط مع النوع "متزايد")
+  vatRate         Float            @default(0) // نسبة ضريبة القيمة المضافة (0, 5, 10, 15)
+  depositAmount   Float?
+  paymentFrequency PaymentFrequency @default(MONTHLY)
+  status          ContractStatus   @default(ACTIVE)
+  notes           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  unitId          String
+  unit            Unit             @relation(fields: [unitId], references: [id], onDelete: Restrict)
+
+  tenantId        String
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  // سلسلة التجديد: العقد الجديد يشير إلى العقد الذي جُدِّد منه
+  renewedFromId String?   @unique
+  renewedFrom   Contract? @relation("ContractRenewal", fields: [renewedFromId], references: [id], onDelete: SetNull)
+  renewedTo     Contract? @relation("ContractRenewal")
+
+  createdById String?
+  createdBy   User?   @relation("ContractCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  payments        Payment[]
+  notifications   Notification[]
+  documents       FinancialDocument[]
+
+  @@map("contracts")
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  dueDate     DateTime
+  amount      Float
+  paidAmount  Float?
+  paidDate    DateTime?
+  status      PaymentStatus @default(PENDING)
+  method      String?
+  recipient   PaymentRecipient? // من استلم المبلغ: المشغل أم المالك
+  reference   String?
+  notes       String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  /// الموظف الذي سجّل التحصيل
+  collectedById String?
+  collectedBy   User?   @relation("PaymentCollector", fields: [collectedById], references: [id], onDelete: SetNull)
+
+  contractId  String
+  contract    Contract      @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  najizReferredAt DateTime? // تاريخ إحالة الدفعة إلى منصة ناجز (سند تنفيذي)
+
+  notifications Notification[]
+  documents     FinancialDocument[]
+
+  @@map("payments")
+}
+
+enum DocumentType {
+  INVOICE // فاتورة
+  RECEIPT // سند قبض
+  PAYMENT_VOUCHER // سند صرف — يصدر عند سداد مصروف
+  OWNER_REMITTANCE // سند توريد — يصدر عند تحويل مستحقات المالك إليه
+}
+
+enum DocumentStatus {
+  DRAFT // مسودة
+  ISSUED // معتمدة
+}
+
+model FinancialDocument {
+  id             String         @id @default(cuid())
+  documentNumber String         @unique
+  type           DocumentType
+  status         DocumentStatus @default(DRAFT)
+  issueDate      DateTime       @default(now())
+  amount         Float
+  hasTax         Boolean        @default(false)
+  taxNumber      String? // الرقم الضريبي - مطلوب فقط عند hasTax
+  notes          String?
+  createdAt      DateTime       @default(now())
+
+  issuedById String?
+  issuedBy   User?   @relation("DocumentIssuer", fields: [issuedById], references: [id], onDelete: SetNull)
+
+  // مستند إيجار: مرتبط بدفعة وعقد. سند صرف: مرتبط بمصروف. لا يجتمعان.
+  paymentId String?
+  payment   Payment? @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  contractId String?
+  contract   Contract? @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  expenseId String?
+  expense   Expense? @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  remittanceId String?
+  remittance   OwnerRemittance? @relation(fields: [remittanceId], references: [id], onDelete: Cascade)
+
+  @@map("financial_documents")
+}
+
+model Notification {
+  id          String              @id @default(cuid())
+  type        NotificationType
+  channel     NotificationChannel @default(IN_APP)
+  status      NotificationStatus  @default(PENDING)
+  title       String
+  message     String
+  isRead      Boolean             @default(false)
+  sentAt      DateTime?
+  createdAt   DateTime            @default(now())
+
+  userId      String?
+  user        User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  contractId  String?
+  contract    Contract?           @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  paymentId   String?
+  payment     Payment?            @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model IntegrationConfig {
+  id          String          @id @default(cuid())
+  name        String
+  type        IntegrationType
+  isActive    Boolean         @default(false)
+  apiKey      String?
+  apiSecret   String?
+  endpointUrl String?
+  config      String? // JSON string لأي إعدادات إضافية
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  logs        IntegrationLog[]
+
+  @@map("integration_configs")
+}
+
+model IntegrationLog {
+  id            String   @id @default(cuid())
+  direction     String // INBOUND / OUTBOUND
+  event         String
+  payload       String?
+  responseCode  Int?
+  success       Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  integrationId String
+  integration   IntegrationConfig @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@map("integration_logs")
+}
+
+/// إعدادات المنشأة - سجل واحد فقط (id ثابت "default") يستخدم في ترويسة الفواتير وسندات القبض
+model OrganizationSettings {
+  id                 String   @id @default("default")
+  name               String?
+  commercialRegister String?
+  taxNumber          String? // الرقم الضريبي
+  phone              String?
+  address            String?
+  nationalAddress    String? // العنوان الوطني — يُذكر في الوثائق النظامية
+  signatoryName      String? // اسم من يوقّع عن المنشأة
+  signatoryTitle     String? // صفته (مدير عام / مفوّض بالتوقيع)
+  agreementPreamble  String? // نص تمهيد اتفاقية الإدارة — قابل للتحرير
+  agreementClosing   String? // نص خاتمة الاتفاقية قبل التوقيعات
+  logoUrl            String?
+  updatedAt          DateTime @updatedAt
+
+  @@map("organization_settings")
+}
+
+/// صور العقار — توثيق حالته وعرضه على المستأجرين
+model BuildingPhoto {
+  id        String  @id @default(cuid())
+  url       String
+  caption   String? // وصف مختصر: الواجهة، المدخل، المواقف
+
+  buildingId String
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@map("building_photos")
+}
+
+/// سند توريد — ما حُوِّل فعلاً للمالك من مستحقاته عن مبنى بعينه
+model OwnerRemittance {
+  id         String   @id @default(cuid())
+  amount     Float
+  remittedAt DateTime // تاريخ التحويل
+  method     String? // تحويل بنكي، نقدي، شيك
+  reference  String? // رقم العملية أو الشيك
+  notes      String?
+
+  ownerId String
+  owner   Owner  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  buildingId String
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  createdById String?
+  createdBy   User?   @relation("RemittanceCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  documents FinancialDocument[]
+
+  createdAt DateTime @default(now())
+
+  @@map("owner_remittances")
+}
+
+/// دور وظيفي يحمل حزمة صلاحيات — يُسند للموظف بدل تعبئة الصلاحيات فرداً فرداً
+model StaffRole {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  description String?
+  /// دور معرّف مع النظام: يمكن تعديل صلاحياته لكن لا يُحذف
+  isSystem    Boolean @default(false)
+  /// "كل شيء ما عدا": يرث أي صلاحية جديدة تلقائياً ما لم تكن حسّاسة
+  inheritsAll Boolean @default(false)
+
+  permissions RolePermission[]
+  users       User[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("staff_roles")
+}
+
+model RolePermission {
+  id    String          @id @default(cuid())
+  key   String // مفتاح الصلاحية من الكتالوج
+  state PermissionState
+
+  roleId String
+  role   StaffRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, key])
+  @@map("role_permissions")
+}
+
+/// استثناء فردي يعلو على الدور — منح أو سحب لموظف بعينه
+model UserPermission {
+  id    String          @id @default(cuid())
+  key   String
+  state PermissionState
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@map("user_permissions")
+}
+
+/// طلب تنفيذ إجراء حسّاس، يُنفَّذ تلقائياً عند موافقة المدير
+model ApprovalRequest {
+  id      String         @id @default(cuid())
+  action  String // مفتاح الإجراء في سجل الإجراءات القابلة للطلب
+  payload String // JSON بمعطيات التنفيذ
+  summary String // وصف مقروء للإجراء وقت الطلب
+  reason  String // سبب الطلب بخط الموظف
+  status  ApprovalStatus @default(PENDING)
+
+  requestedById String
+  requestedBy   User   @relation("ApprovalRequester", fields: [requestedById], references: [id], onDelete: Cascade)
+
+  decidedById  String?
+  decidedBy    User?     @relation("ApprovalDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt    DateTime?
+  decisionNote String?
+  /// سبب تعذّر التنفيذ بعد الموافقة، إن حدث
+  error        String?
+
+  /// يسقط الطلب تلقائياً بعد هذا التاريخ
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("approval_requests")
+}
+
+/// سجل العمليات: من فعل ماذا ومتى
+model AuditLog {
+  id      String  @id @default(cuid())
+  action  String // مفتاح الصلاحية المستخدمة
+  summary String // وصف مقروء لما جرى
+  targetType String?
+  targetId   String?
+  /// معبّأ إذا نُفِّذ الإجراء عبر موافقة على طلب
+  approvalId String?
+
+  userId   String?
+  user     User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userName String // الاسم وقت التنفيذ، يبقى ولو حُذف الحساب
+
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("audit_logs")
+}
