@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -60,7 +61,7 @@ function IntegrationFields({ integration }: { integration?: Integration }) {
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="apiSecret">السر (Secret) — يُستخدم أيضاً للتحقق من طلبات Webhook الواردة</Label>
-        <Input id="apiSecret" name="apiSecret" dir="ltr" type="password" defaultValue={integration?.apiSecret ?? ""} />
+        <PasswordInput id="apiSecret" name="apiSecret" defaultValue={integration?.apiSecret ?? ""} />
       </div>
       <div className="flex items-center justify-between rounded-lg border p-3">
         <p className="text-sm font-medium">تفعيل الربط</p>

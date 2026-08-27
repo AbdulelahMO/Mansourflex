@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { LogOut } from "lucide-react";
+import { LogOut, UserCog } from "lucide-react";
 import { doSignOut } from "@/lib/actions/auth";
 
 export function UserMenu({
@@ -47,6 +49,13 @@ export function UserMenu({
             </span>
           </div>
         </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href="/account" className="flex w-full cursor-pointer items-center gap-2">
+            <UserCog className="size-4" />
+            حسابي
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <form action={doSignOut}>
           <button type="submit" className="w-full">

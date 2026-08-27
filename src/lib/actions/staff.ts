@@ -8,6 +8,7 @@ import { requireAdmin } from "@/lib/session";
 import { recordAudit } from "@/lib/authz";
 import { decideApproval } from "@/lib/approvals";
 import { ALL_PERMISSIONS, ALWAYS_ADMIN_ONLY } from "@/lib/permissions";
+import { generateTemporaryPassword } from "@/lib/passwords";
 import type { ActionState } from "@/lib/types";
 
 const VALID_KEYS = new Set(ALL_PERMISSIONS.map((p) => p.key));
@@ -64,9 +65,6 @@ export async function createEmployee(_prev: ActionState, formData: FormData): Pr
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "تحقق من الحقول" };
   const d = parsed.data;
 
-  const password = String(formData.get("password") ?? "");
-  if (password.length < 8) return { error: "كلمة المرور لا تقل عن 8 أحرف" };
-
   const nationalId = String(formData.get("nationalId") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
   const identity = await identityError(nationalId, phone, { required: true });
@@ -75,13 +73,18 @@ export async function createEmployee(_prev: ActionState, formData: FormData): Pr
   const taken = await prisma.user.findUnique({ where: { email: d.email } });
   if (taken) return { error: "البريد الإلكتروني مستخدم مسبقاً" };
 
+  // Generated, never chosen by the admin — and replaced by the employee on first sign-in,
+  // so the working password is known to its holder alone.
+  const temporary = generateTemporaryPassword();
+
   const user = await prisma.user.create({
     data: {
       name: d.name,
       email: d.email,
       nationalId,
       phone,
-      passwordHash: await bcrypt.hash(password, 10),
+      passwordHash: await bcrypt.hash(temporary, 10),
+      mustChangePassword: true,
       role: "EMPLOYEE",
       staffRoleId: d.staffRoleId,
       isActive: d.isActive,
@@ -90,7 +93,10 @@ export async function createEmployee(_prev: ActionState, formData: FormData): Pr
 
   await recordAudit({ user: admin, action: "staff.manage", summary: `إضافة موظف: ${d.name}`, targetId: user.id });
   revalidatePath("/settings/employees");
-  return { success: true, message: "تمت إضافة الموظف" };
+  return {
+    success: true,
+    message: `تمت إضافة الموظف. كلمة المرور المؤقتة: ${temporary} — سلّمها له، ولن تظهر مرة أخرى.`,
+  };
 }
 
 export async function updateEmployee(id: string, _prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -111,9 +117,6 @@ export async function updateEmployee(id: string, _prev: ActionState, formData: F
   const taken = await prisma.user.findFirst({ where: { email: d.email, id: { not: id } } });
   if (taken) return { error: "البريد الإلكتروني مستخدم مسبقاً" };
 
-  const password = String(formData.get("password") ?? "");
-  if (password && password.length < 8) return { error: "كلمة المرور لا تقل عن 8 أحرف" };
-
   const nationalId = String(formData.get("nationalId") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
   const identity = await identityError(nationalId, phone, { required: false, ignoreUserId: id });
@@ -129,14 +132,38 @@ export async function updateEmployee(id: string, _prev: ActionState, formData: F
       phone: phone || null,
       staffRoleId: d.staffRoleId,
       isActive: d.isActive,
-      // Left untouched unless a new one was typed.
-      ...(password ? { passwordHash: await bcrypt.hash(password, 10) } : {}),
     },
   });
 
   await recordAudit({ user: admin, action: "staff.manage", summary: `تعديل بيانات الموظف: ${d.name}`, targetId: id });
   revalidatePath("/settings/employees");
   return { success: true, message: "تم حفظ التعديلات" };
+}
+
+/** For a forgotten password: a fresh temporary one, shown to the admin once and forced to change. */
+export async function resetEmployeePassword(id: string): Promise<ActionState> {
+  const admin = await requireAdmin();
+
+  const target = await prisma.user.findUnique({ where: { id }, select: { name: true, role: true } });
+  if (!target || target.role !== "EMPLOYEE") return { error: "الموظف غير موجود" };
+
+  const temporary = generateTemporaryPassword();
+  await prisma.user.update({
+    where: { id },
+    data: { passwordHash: await bcrypt.hash(temporary, 10), mustChangePassword: true },
+  });
+
+  await recordAudit({
+    user: admin,
+    action: "staff.manage",
+    summary: `إعادة تعيين كلمة مرور الموظف ${target.name}`,
+    targetId: id,
+  });
+  revalidatePath("/settings/employees");
+  return {
+    success: true,
+    message: `كلمة المرور المؤقتة لـ${target.name}: ${temporary} — سلّمها له، ولن تظهر مرة أخرى.`,
+  };
 }
 
 export async function deleteEmployee(id: string): Promise<ActionState> {

@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { SubmitButton } from "@/components/submit-button";
 import { loginAction } from "@/lib/actions/login";
@@ -19,7 +20,7 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="password">كلمة المرور</Label>
-        <Input id="password" name="password" type="password" required autoComplete="current-password" dir="ltr" />
+        <PasswordInput id="password" name="password" required autoComplete="current-password" />
       </div>
       {state?.error && (
         <p className="text-sm text-destructive" aria-live="polite">

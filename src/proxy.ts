@@ -36,7 +36,10 @@ export default auth((req) => {
     return NextResponse.redirect(new URL("/", req.nextUrl.origin));
   }
 
-  return NextResponse.next();
+  // The layout needs the path to know whether a forced password change is already in progress.
+  const headers = new Headers(req.headers);
+  headers.set("x-pathname", pathname);
+  return NextResponse.next({ request: { headers } });
 });
 
 export const config = {

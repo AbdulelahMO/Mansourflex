@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { SidebarNav } from "@/components/sidebar-nav";
@@ -13,6 +14,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (!session?.user) redirect("/login");
 
   const { name, role } = session.user;
+
+  // A temporary password buys access to one screen only: the one that replaces it.
+  const account = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { mustChangePassword: true },
+  });
+  if (account?.mustChangePassword) {
+    const pathname = (await headers()).get("x-pathname") ?? "";
+    if (!pathname.startsWith("/account")) redirect("/account");
+  }
   const org = await prisma.organizationSettings.findUnique({ where: { id: "default" } });
 
   // Employees only see the sections their role opens; resolved once per render.

@@ -122,6 +122,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: "settings.organization", label: "بيانات المنشأة", sensitive: true },
       { key: "settings.integrations", label: "الربط والتكاملات", sensitive: true },
       { key: "audit.view", label: "عرض سجل العمليات", sensitive: true },
+      { key: "account.password", label: "تغيير كلمة المرور الشخصية" },
       { key: "staff.manage", label: "إدارة الموظفين والصلاحيات", sensitive: true, adminOnly: true },
       { key: "approvals.decide", label: "البتّ في طلبات الموافقة", sensitive: true, adminOnly: true },
     ],

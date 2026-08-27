@@ -41,7 +41,11 @@ export function EmployeeDialog({ roles, employee }: { roles: RoleOption[]; emplo
         )
       }
       title={isEdit ? "تعديل بيانات الموظف" : "إضافة موظف"}
-      description={isEdit ? undefined : "يُنشأ للموظف حساب دخول بصلاحيات دوره"}
+      description={
+        isEdit
+          ? "لتغيير كلمة المرور استخدم «إعادة تعيين كلمة المرور» من قائمة الموظف"
+          : "يولّد النظام كلمة مرور مؤقتة تُعرض لك مرة واحدة، ويُلزَم الموظف بتغييرها عند أول دخول"
+      }
       action={isEdit ? updateEmployee.bind(null, employee.id) : createEmployee}
       submitLabel={isEdit ? "حفظ التعديلات" : "إضافة"}
     >
@@ -89,16 +93,6 @@ export function EmployeeDialog({ roles, employee }: { roles: RoleOption[]; emplo
           البريد الإلكتروني <span className="text-destructive">*</span>
         </Label>
         <Input id="email" name="email" type="email" dir="ltr" required defaultValue={employee?.email} />
-      </div>
-
-      <div className="space-y-1.5">
-        <Label htmlFor="password">
-          كلمة المرور {!isEdit && <span className="text-destructive">*</span>}
-        </Label>
-        <Input id="password" name="password" type="password" dir="ltr" required={!isEdit} minLength={8} />
-        <p className="text-xs text-muted-foreground">
-          {isEdit ? "اتركها فارغة للإبقاء على كلمة المرور الحالية" : "٨ أحرف على الأقل"}
-        </p>
       </div>
 
       <div className="space-y-1.5">

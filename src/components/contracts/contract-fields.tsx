@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TermFields } from "@/components/shared/term-fields";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AddTenantInlineDialog } from "@/components/tenants/add-tenant-inline-dialog";
@@ -233,15 +234,13 @@ export function ContractFields({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="startDate">تاريخ البداية</Label>
-          <Input id="startDate" name="startDate" type="date" required onChange={(e) => setStartDate(e.target.value)} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="endDate">تاريخ النهاية</Label>
-          <Input id="endDate" name="endDate" type="date" required onChange={(e) => setEndDate(e.target.value)} />
-        </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <TermFields
+          onChange={({ startDate: s, endDate: e }) => {
+            setStartDate(s);
+            setEndDate(e);
+          }}
+        />
       </div>
 
       <div className={cn("grid grid-cols-1 gap-4 sm:grid-cols-2", amountType === "INCREASING" ? "lg:grid-cols-3" : "lg:grid-cols-2")}>

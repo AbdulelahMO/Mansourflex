@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TermFields } from "@/components/shared/term-fields";
 import { Textarea } from "@/components/ui/textarea";
 import { toDateInputValue } from "@/lib/format";
 import { Paperclip } from "lucide-react";
@@ -124,18 +125,12 @@ export function AgreementFields({
           ) : (
             <input type="hidden" name="status" value="ACTIVE" />
           )}
-          <div className="space-y-1.5">
-            <Label htmlFor="startDate">
-              تاريخ البداية <span className="text-destructive">*</span>
-            </Label>
-            <Input id="startDate" name="startDate" type="date" required defaultValue={toDateInputValue(agreement?.startDate)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="endDate">
-              تاريخ النهاية <span className="text-destructive">*</span>
-            </Label>
-            <Input id="endDate" name="endDate" type="date" required defaultValue={toDateInputValue(agreement?.endDate)} />
-          </div>
+          <TermFields
+            startLabel="تاريخ بداية الاتفاقية"
+            endLabel="تاريخ نهاية الاتفاقية"
+            defaultStart={toDateInputValue(agreement?.startDate)}
+            defaultEnd={toDateInputValue(agreement?.endDate)}
+          />
           {/* التوقيع قد يسبق بداية السريان، فيُسجَّل مستقلاً ويظهر في صدر الوثيقة. */}
           <div className="space-y-1.5">
             <Label htmlFor="signedAt">تاريخ التوقيع</Label>

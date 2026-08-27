@@ -107,6 +107,8 @@ model User {
   /// رقم هوية الموظف — يربط الحساب بشخص بعينه ولا يتكرّر
   nationalId   String?  @unique
   phone        String?
+  /// كلمة مرور مؤقتة: يُساق المستخدم لتغييرها قبل الوصول لأي شاشة
+  mustChangePassword Boolean @default(false)
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

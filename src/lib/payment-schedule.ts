@@ -19,6 +19,51 @@ function round2(n: number) {
   return Math.round(n * 100) / 100;
 }
 
+/**
+ * Adds whole calendar months while keeping the contract's due day.
+ *
+ * Plain `setMonth` overflows — 31 January plus one month becomes 3 March, and every later
+ * instalment stays shifted. Anchoring on the original day and clamping to the last day of a
+ * shorter month gives what a lease actually says: 31 Jan → 28 Feb → 31 Mar → 30 Apr.
+ */
+function addMonths(start: Date, months: number) {
+  const day = start.getDate();
+  const target = new Date(start);
+  target.setDate(1); // ينحّي يوم الشهر مؤقتاً حتى لا تفيض الإضافة
+  target.setMonth(target.getMonth() + months);
+
+  const lastDayOfTarget = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(day, lastDayOfTarget));
+  target.setHours(start.getHours(), start.getMinutes(), start.getSeconds(), start.getMilliseconds());
+  return target;
+}
+
+/**
+ * End date for a term entered as years/months/days, the way a lease states it: the last day
+ * is inside the term, so a one-year contract starting 15 Jan 2026 ends 14 Jan 2027 — the same
+ * rule Ejar applies. Month-end is clamped, so 31 Jan + 1 year ends 30 Jan, never a drifted date.
+ */
+export function endDateFromTerm(start: Date, years: number, months: number, days: number) {
+  const totalMonths = years * 12 + months;
+  const end = addMonths(start, totalMonths);
+  end.setDate(end.getDate() + days - 1); // اليوم الأخير محسوب ضمن المدة
+  return end;
+}
+
+/** The reverse, for an end date typed by hand: whole years, then months, then leftover days. */
+export function termFromEndDate(start: Date, end: Date) {
+  const inclusiveEnd = new Date(end);
+  inclusiveEnd.setDate(inclusiveEnd.getDate() + 1); // نعود ليوم ما بعد النهاية لتُحسب المدة كاملة
+
+  let months = 0;
+  while (addMonths(start, months + 1) <= inclusiveEnd) months++;
+
+  const afterMonths = addMonths(start, months);
+  const days = Math.round((inclusiveEnd.getTime() - afterMonths.getTime()) / 86400000);
+
+  return { years: Math.floor(months / 12), months: months % 12, days: Math.max(0, days) };
+}
+
 function withVat(dueDate: Date, base: number, vatRate: number): ScheduledPayment {
   const baseAmount = round2(base);
   const amount = round2(base * (1 + vatRate / 100));
@@ -52,10 +97,10 @@ export function buildPaymentSchedule(
 
   const step = FREQUENCY_MONTHS[frequency] ?? 1;
   const dates: Date[] = [];
-  const cursor = new Date(start);
-  while (cursor < end) {
-    dates.push(new Date(cursor));
-    cursor.setMonth(cursor.getMonth() + step);
+  for (let i = 0; ; i++) {
+    const due = addMonths(start, i * step);
+    if (due >= end) break;
+    dates.push(due);
   }
 
   const installmentsPerYear = Math.max(1, Math.round(12 / step));

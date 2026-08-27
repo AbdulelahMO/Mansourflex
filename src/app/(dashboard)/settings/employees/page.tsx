@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DeleteButton } from "@/components/delete-button";
 import { EmployeeDialog, RoleDialog } from "@/components/staff/staff-dialogs";
+import { ResetPasswordButton } from "@/components/staff/reset-password-button";
 import { deleteEmployee, deleteRole } from "@/lib/actions/staff";
 import { formatDate } from "@/lib/format";
 import { UsersRound, ShieldCheck } from "lucide-react";
@@ -97,6 +98,7 @@ export default async function EmployeesPage() {
                             <Link href={`/settings/employees/${e.id}`}>الصلاحيات</Link>
                           </Button>
                           <EmployeeDialog roles={roleOptions} employee={e} />
+                          <ResetPasswordButton employeeId={e.id} name={e.name} />
                           <DeleteButton
                             action={deleteEmployee.bind(null, e.id)}
                             title="حذف الموظف"
