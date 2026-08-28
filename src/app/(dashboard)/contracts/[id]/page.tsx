@@ -12,6 +12,7 @@ import { RenewContractDialog } from "@/components/contracts/renew-contract-dialo
 import { formatCurrency, formatDate } from "@/lib/format";
 import { ContractActionsMenu } from "@/components/contracts/contract-actions-menu";
 import { MarkPaidDialog } from "@/components/payments/mark-paid-dialog";
+import { EditCollectionDialog } from "@/components/payments/edit-collection-dialog";
 import { IssueDocumentButtons } from "@/components/contracts/document-actions";
 import { DeleteButton } from "@/components/delete-button";
 import { cancelFinancialDocument } from "@/lib/actions/documents";
@@ -42,6 +43,10 @@ const FREQUENCY_LABELS: Record<string, string> = {
   ANNUAL: "سنوي",
   ONE_TIME: "دفعة واحدة",
 };
+
+function toInputDate(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
 
 function InfoItem({ label, value }: { label: string; value: string | number | null | undefined }) {
   if (!value) return null;
@@ -225,6 +230,17 @@ export default async function ContractDetailPage(props: PageProps<"/contracts/[i
                         <TableCell>
                           <div className="flex items-center justify-end gap-1">
                             {p.status !== "PAID" && <MarkPaidDialog paymentId={p.id} amount={remaining} />}
+                            {(p.paidAmount ?? 0) > 0 && p.paidDate && (
+                              <EditCollectionDialog
+                                paymentId={p.id}
+                                paidAmount={p.paidAmount ?? 0}
+                                paidDate={toInputDate(p.paidDate)}
+                                method={p.method}
+                                recipient={p.recipient}
+                                reference={p.reference}
+                                notes={p.notes}
+                              />
+                            )}
                             <IssueDocumentButtons
                               paymentId={p.id}
                               settled={

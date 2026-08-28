@@ -21,7 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { MoreVertical, Eye } from "lucide-react";
+import { MoreVertical, Eye, Pencil } from "lucide-react";
 import { updateContractStatus, deleteContract } from "@/lib/actions/contracts";
 
 export function ContractActionsMenu({ id, status }: { id: string; status: string }) {
@@ -55,6 +55,12 @@ export function ContractActionsMenu({ id, status }: { id: string; status: string
             <Link href={`/contracts/${id}`}>
               <Eye className="size-4" />
               عرض العقد
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link href={`/contracts/${id}/edit`}>
+              <Pencil className="size-4" />
+              تعديل العقد
             </Link>
           </DropdownMenuItem>
           <DropdownMenuSeparator />

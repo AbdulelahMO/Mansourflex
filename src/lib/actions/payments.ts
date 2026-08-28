@@ -157,6 +157,63 @@ export async function markPaymentPaid(id: string, _prev: ActionState, formData: 
   };
 }
 
+const collectionDetailsSchema = z.object({
+  paidDate: z.string().trim().min(1, "تاريخ الدفع مطلوب"),
+  method: z.string().trim().optional().or(z.literal("")),
+  recipient: z.enum(["OPERATOR", "OWNER"]).optional(),
+  reference: z.string().trim().optional().or(z.literal("")),
+  notes: z.string().trim().optional().or(z.literal("")),
+});
+
+/**
+ * Correcting how a collection was recorded — its date, method, reference, recipient and note —
+ * without touching the amount. A wrong digit in a transfer number should not cost a receipt:
+ * the money is unchanged, so no document is affected and none needs reissuing. Changing the
+ * amount stays impossible here by design; that is what reversing the collection is for.
+ */
+export async function updateCollectionDetails(
+  id: string,
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const { user } = await requirePermission("payments.edit");
+
+  const payment = await prisma.payment.findUnique({ where: { id }, include: { contract: true } });
+  if (!payment) return { error: "الدفعة غير موجودة" };
+  if (!payment.paidAmount || payment.paidAmount <= 0) {
+    return { error: "لا توجد بيانات تحصيل لتعديلها — لم يُسجَّل على هذه الدفعة مبلغ بعد" };
+  }
+
+  const parsed = collectionDetailsSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: "تحقق من الحقول", fieldErrors: parsed.error.flatten().fieldErrors };
+  }
+  const d = parsed.data;
+
+  await prisma.payment.update({
+    where: { id },
+    data: {
+      paidDate: new Date(d.paidDate),
+      method: d.method || null,
+      recipient: d.recipient ?? null,
+      reference: d.reference || null,
+      notes: d.notes || null,
+    },
+  });
+
+  await recordAudit({
+    user,
+    action: "payments.edit",
+    summary: `تعديل بيانات تحصيل دفعة مستحقة ${formatDate(payment.dueDate)} على العقد ${payment.contract.contractNumber}`,
+    targetId: id,
+  });
+
+  revalidatePath("/payments");
+  revalidatePath("/documents");
+  revalidatePath(`/contracts/${payment.contractId}`);
+  return { success: true, message: "تم حفظ بيانات التحصيل" };
+}
+
 /** Undoes one collection: the receipt is voided and its amount taken back off the instalment. */
 export async function reverseCollection(receiptId: string, reason?: string): Promise<ActionState> {
   return runSensitive("payments.reverse", { id: receiptId, reason }, reason);

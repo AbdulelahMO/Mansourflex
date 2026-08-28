@@ -103,6 +103,157 @@ export async function createContract(_prev: ActionState, formData: FormData): Pr
   redirect("/contracts");
 }
 
+/** Contract fields that carry no consequence for the instalment schedule. */
+const contractDetailsSchema = z.object({
+  ejarContractNumber: z.string().trim().optional().or(z.literal("")),
+  depositAmount: z.string().trim().optional().or(z.literal("")),
+  notes: z.string().trim().optional().or(z.literal("")),
+});
+
+/** The terms the schedule is built from — changing any of them rebuilds it. */
+const contractTermsSchema = z.object({
+  startDate: z.string().trim().min(1, "تاريخ البداية مطلوب"),
+  endDate: z.string().trim().min(1, "تاريخ النهاية مطلوب"),
+  rentAmount: z.string().trim().min(1, "قيمة العقد مطلوبة"),
+  amountType: z.enum(["TOTAL", "ANNUAL", "INCREASING"]),
+  increasePercent: z.string().trim().optional().or(z.literal("")),
+  vatRate: z.enum(["0", "5", "10", "15"]),
+  paymentFrequency: z.enum(["MONTHLY", "QUARTERLY", "SEMI_ANNUAL", "ANNUAL", "ONE_TIME"]),
+});
+
+/**
+ * Correcting a contract. The unit and the tenant are not among the fields: a lease with another
+ * tenant is another lease, not a correction of this one.
+ *
+ * The terms behind the schedule are a different matter from the rest. Changing them rebuilds
+ * the instalments — and an instalment that carries a financial document is never rebuilt, since
+ * deleting it would take an issued invoice or receipt down with it. Those instalments stay as
+ * billed and the new terms apply from the ones after them. Only the administrator may change
+ * the terms once anything has been issued; for everyone else they are locked.
+ */
+export async function updateContract(id: string, _prev: ActionState, formData: FormData): Promise<ActionState> {
+  const { user } = await requirePermission("contracts.edit");
+
+  const contract = await prisma.contract.findUnique({
+    where: { id },
+    include: { payments: { orderBy: { dueDate: "asc" }, include: { documents: { select: { id: true } } } } },
+  });
+  if (!contract) return { error: "العقد غير موجود" };
+
+  const details = contractDetailsSchema.safeParse(Object.fromEntries(formData));
+  if (!details.success) {
+    return { error: "تحقق من الحقول", fieldErrors: details.error.flatten().fieldErrors };
+  }
+
+  const terms = contractTermsSchema.safeParse(Object.fromEntries(formData));
+  if (!terms.success) {
+    return { error: "تحقق من الحقول", fieldErrors: terms.error.flatten().fieldErrors };
+  }
+  const t = terms.data;
+
+  const startDate = new Date(t.startDate);
+  const endDate = new Date(t.endDate);
+  const rentAmount = Number(t.rentAmount);
+  const vatRate = Number(t.vatRate);
+  const increasePercent = t.amountType === "INCREASING" ? Number(t.increasePercent || 0) : 0;
+
+  if (endDate <= startDate) return { error: "تاريخ النهاية يجب أن يكون بعد تاريخ البداية" };
+  if (!Number.isFinite(rentAmount) || rentAmount <= 0) return { error: "قيمة العقد غير صحيحة" };
+  if (t.amountType === "INCREASING" && increasePercent <= 0) {
+    return { error: "نسبة الزيادة السنوية مطلوبة للعقد المتزايد" };
+  }
+
+  const termsChanged =
+    startDate.getTime() !== contract.startDate.getTime() ||
+    endDate.getTime() !== contract.endDate.getTime() ||
+    rentAmount !== contract.rentAmount ||
+    t.amountType !== contract.amountType ||
+    increasePercent !== (contract.increasePercent ?? 0) ||
+    vatRate !== contract.vatRate ||
+    t.paymentFrequency !== contract.paymentFrequency;
+
+  // An instalment is kept if anything has happened on it: a document, or money recorded before
+  // documents were mandatory. Rebuilding it would delete an issued invoice with it, or erase a
+  // collection that no longer has any other record.
+  const documented = contract.payments.filter((p) => p.documents.length > 0 || (p.paidAmount ?? 0) > 0);
+
+  if (termsChanged && documented.length > 0 && user.role !== "ADMIN") {
+    return {
+      error: `لا يمكن تعديل شروط العقد بعد تحصيل أو إصدار مستندات على ${documented.length} من أقساطه — راجع مدير النظام.`,
+    };
+  }
+
+  const detailsData = {
+    ejarContractNumber: details.data.ejarContractNumber || null,
+    depositAmount: details.data.depositAmount ? Number(details.data.depositAmount) : null,
+    notes: details.data.notes || null,
+  };
+
+  if (!termsChanged) {
+    await prisma.contract.update({ where: { id }, data: detailsData });
+    await recordAudit({ user, action: "contracts.edit", summary: `تعديل بيانات العقد ${contract.contractNumber}`, targetId: id });
+    revalidatePath(`/contracts/${id}`);
+    revalidatePath("/contracts");
+    return { success: true, message: "تم حفظ التعديلات" };
+  }
+
+  const schedule = buildPaymentSchedule(
+    startDate,
+    endDate,
+    rentAmount,
+    t.paymentFrequency,
+    t.amountType,
+    increasePercent,
+    vatRate
+  );
+  if (schedule.length === 0) return { error: "تعذر توليد جدول الدفعات — راجع التواريخ" };
+
+  // Everything already billed stands; the new terms take effect after the last of it.
+  const keptUntil = documented.reduce<Date | null>(
+    (latest, p) => (!latest || p.dueDate > latest ? p.dueDate : latest),
+    null
+  );
+  const replaceable = contract.payments.filter((p) => p.documents.length === 0 && !(p.paidAmount ?? 0));
+  const fresh = keptUntil ? schedule.filter((p) => p.dueDate > keptUntil) : schedule;
+
+  await prisma.$transaction([
+    prisma.payment.deleteMany({ where: { id: { in: replaceable.map((p) => p.id) } } }),
+    prisma.contract.update({
+      where: { id },
+      data: {
+        ...detailsData,
+        startDate,
+        endDate,
+        rentAmount,
+        amountType: t.amountType,
+        increasePercent: t.amountType === "INCREASING" ? increasePercent : null,
+        vatRate,
+        paymentFrequency: t.paymentFrequency,
+        payments: { create: fresh.map((p) => ({ dueDate: p.dueDate, amount: p.amount })) },
+      },
+    }),
+  ]);
+
+  await recordAudit({
+    user,
+    action: "contracts.edit",
+    summary: `تعديل شروط العقد ${contract.contractNumber} وإعادة توليد ${fresh.length} قسطاً${
+      documented.length ? ` مع إبقاء ${documented.length} قسطاً عليها تحصيل أو مستندات` : ""
+    }`,
+    targetId: id,
+  });
+
+  revalidatePath(`/contracts/${id}`);
+  revalidatePath("/contracts");
+  revalidatePath("/payments");
+  return {
+    success: true,
+    message: documented.length
+      ? `تم الحفظ — أُبقيت ${documented.length} قسطاً عليها تحصيل أو مستندات، وأُعيد توليد ${fresh.length} قسطاً بالشروط الجديدة`
+      : `تم الحفظ وأُعيد توليد ${fresh.length} قسطاً`,
+  };
+}
+
 export async function updateContractStatus(id: string, status: "ACTIVE" | "EXPIRED" | "TERMINATED"): Promise<ActionState> {
   await requirePermission("contracts.edit");
 
