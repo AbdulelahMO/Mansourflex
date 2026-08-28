@@ -107,7 +107,15 @@ export default async function FinancialDocumentsPage(props: PageProps<"/document
       where,
       include: {
         contract: { select: { id: true, contractNumber: true, tenant: { select: { name: true } } } },
-        payment: { select: { id: true, contractId: true, dueDate: true, recipient: true } },
+        payment: {
+          select: {
+            id: true,
+            contractId: true,
+            dueDate: true,
+            recipient: true,
+            collectedBy: { select: { name: true } },
+          },
+        },
         expense: { select: { description: true, vendor: true, building: { select: { name: true } } } },
         remittance: { select: { owner: { select: { name: true } }, building: { select: { name: true } } } },
         issuedBy: { select: { name: true } },
@@ -240,6 +248,7 @@ export default async function FinancialDocumentsPage(props: PageProps<"/document
                       <TableHead>البيان</TableHead>
                       <TableHead className="text-left">المبلغ</TableHead>
                       <TableHead>المستلم</TableHead>
+                      <TableHead>مُدخِل الدفعة</TableHead>
                       <TableHead>أصدره</TableHead>
                       <TableHead>خيارات</TableHead>
                     </TableRow>
@@ -308,6 +317,9 @@ export default async function FinancialDocumentsPage(props: PageProps<"/document
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {d.payment?.recipient ? RECIPIENT_LABELS[d.payment.recipient] : "—"}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {d.payment?.collectedBy?.name ?? "—"}
                         </TableCell>
                         <TableCell className="text-muted-foreground">{d.issuedBy?.name ?? "—"}</TableCell>
                         <TableCell>

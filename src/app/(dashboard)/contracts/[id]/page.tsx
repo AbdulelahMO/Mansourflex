@@ -83,6 +83,7 @@ export default async function ContractDetailPage(props: PageProps<"/contracts/[i
   // Receipts are issued against an invoice, so that invoice stays locked until they are removed.
   const receiptsByPaymentId = new Map<string, string[]>();
   const recipientByPaymentId = new Map(contract.payments.map((p) => [p.id, p.recipient]));
+  const collectorByPaymentId = new Map(contract.payments.map((p) => [p.id, p.collectedBy?.name ?? null]));
   const receiptedByPaymentId = new Map<string, number>();
   for (const d of contract.documents) {
     if (d.type !== "RECEIPT" || !d.paymentId) continue;
@@ -264,6 +265,7 @@ export default async function ContractDetailPage(props: PageProps<"/contracts/[i
                     <TableHead>التاريخ</TableHead>
                     <TableHead>المبلغ</TableHead>
                     <TableHead>المستلم</TableHead>
+                    <TableHead>مُدخِل الدفعة</TableHead>
                     <TableHead>الضريبة</TableHead>
                     <TableHead>الحالة</TableHead>
                     <TableHead className="w-32">خيارات</TableHead>
@@ -283,6 +285,9 @@ export default async function ContractDetailPage(props: PageProps<"/contracts/[i
                           const recipient = d.paymentId ? recipientByPaymentId.get(d.paymentId) : null;
                           return recipient ? RECIPIENT_LABELS[recipient] : "—";
                         })()}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {(d.paymentId ? collectorByPaymentId.get(d.paymentId) : null) ?? "—"}
                       </TableCell>
                       <TableCell>
                         {d.hasTax ? (
