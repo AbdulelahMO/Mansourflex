@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
+import { headers, cookies } from "next/headers";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { SidebarNav } from "@/components/sidebar-nav";
+import { Sidebar } from "@/components/sidebar";
+import { SIDEBAR_COOKIE } from "@/lib/ui-cookies";
 import { Topbar } from "@/components/topbar";
 import { BottomNav } from "@/components/bottom-nav";
-import { BrandMark } from "@/components/brand-mark";
 import { navItems } from "@/components/nav-items";
 import { statesFor } from "@/lib/authz";
 
@@ -34,6 +34,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
     .map(([key]) => key);
   const orgName = org?.name || "إدارة الأملاك";
 
+  // The sidebar's saved width, read on the server so it renders at that width from the first paint.
+  const collapsed = (await cookies()).get(SIDEBAR_COOKIE)?.value === "collapsed";
+
   // Owners take no part in approvals; staff see what is waiting on them.
   const pendingApprovals =
     role === "OWNER"
@@ -47,14 +50,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="flex min-h-screen">
-      <aside className="hidden md:flex md:w-64 md:flex-col md:border-l md:bg-background print:hidden">
-        <div className="flex items-center gap-2 border-b px-4 py-3.5">
-          <BrandMark name={orgName} logoUrl={org?.logoUrl} />
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          <SidebarNav role={role} allowed={allowed} />
-        </div>
-      </aside>
+      <Sidebar
+        role={role}
+        allowed={allowed}
+        orgName={orgName}
+        orgLogoUrl={org?.logoUrl}
+        defaultCollapsed={collapsed}
+      />
 
       <div className="flex min-h-screen flex-1 flex-col">
         <div className="print:hidden">
