@@ -78,7 +78,7 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
 
 
   return (
-    <div className="space-y-4">
+    <div className="print-wide space-y-4">
       <div className="flex items-center justify-between print:hidden">
         <Link
           href={`/owners/${owner.id}`}
@@ -143,7 +143,7 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
                   <TableHead className="text-left">المحصّل</TableHead>
                   <TableHead className="text-left">المتأخر</TableHead>
                   <TableHead className="text-left">المصروفات</TableHead>
-                  <TableHead className="text-left">صافي المحصّل</TableHead>
+                  <TableHead className="text-left print:hidden">صافي المحصّل</TableHead>
                   <TableHead className="text-left">العمولة</TableHead>
                   <TableHead className="text-left">مستحق المالك</TableHead>
                   <TableHead className="text-left">قبضه المالك</TableHead>
@@ -181,7 +181,7 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
                     <TableCell className="text-left tabular-nums text-muted-foreground">
                       {formatCurrency(l.ownerExpenses)}
                     </TableCell>
-                    <TableCell className="text-left tabular-nums">{formatCurrency(l.netCollected)}</TableCell>
+                    <TableCell className="text-left tabular-nums print:hidden">{formatCurrency(l.netCollected)}</TableCell>
                     <TableCell className="text-left tabular-nums text-muted-foreground">
                       {formatCurrency(l.commission)}
                     </TableCell>
@@ -224,7 +224,7 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
                     {formatCurrency(totals.outstanding)}
                   </TableCell>
                   <TableCell className="text-left tabular-nums">{formatCurrency(totals.ownerExpenses)}</TableCell>
-                  <TableCell className="text-left tabular-nums">{formatCurrency(totals.netCollected)}</TableCell>
+                  <TableCell className="text-left tabular-nums print:hidden">{formatCurrency(totals.netCollected)}</TableCell>
                   <TableCell className="text-left tabular-nums">{formatCurrency(totals.commission)}</TableCell>
                   <TableCell className="text-left tabular-nums">{formatCurrency(totals.payableToOwner)}</TableCell>
                   <TableCell className="text-left tabular-nums">{formatCurrency(totals.collectedByOwner)}</TableCell>

@@ -131,3 +131,53 @@
     @apply font-sans;
   }
 }
+/*
+ * Printing. Wide financial tables are unreadable on portrait A4, so a page that declares
+ * `print-wide` prints landscape at a tighter scale, with the header repeated on every sheet
+ * and rows kept whole. Narrow documents (invoices, vouchers, agreements) keep portrait.
+ */
+@page {
+  margin: 12mm;
+}
+
+@page wide {
+  size: A4 landscape;
+  margin: 10mm;
+}
+
+@media print {
+  html,
+  body {
+    background: #fff;
+  }
+
+  .print-wide {
+    page: wide;
+  }
+
+  /* Horizontal scrollers must not clip their content onto a lost second page. */
+  .overflow-x-auto {
+    overflow: visible !important;
+  }
+
+  .print-wide table {
+    width: 100%;
+    font-size: 9.5pt;
+  }
+
+  .print-wide th,
+  .print-wide td {
+    padding-block: 4px !important;
+    padding-inline: 6px !important;
+  }
+
+  /* Column headers repeat when a long statement runs over several sheets. */
+  thead {
+    display: table-header-group;
+  }
+
+  tr,
+  .avoid-break {
+    break-inside: avoid;
+  }
+}
