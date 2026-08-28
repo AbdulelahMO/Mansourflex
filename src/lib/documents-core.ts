@@ -67,12 +67,20 @@ export async function unreceiptedAmount(paymentId: string, paidAmount: number | 
   return Math.max(0, (paidAmount ?? 0) - acknowledged);
 }
 
-export type IssueReceiptResult = { ok: true; documentNumber: string } | { ok: false; error: string };
+export type IssueReceiptResult =
+  | { ok: true; documentNumber: string; invoiceNumber?: string }
+  | { ok: false; error: string };
 
 /**
  * Issues a receipt for whatever has been collected on the payment but not yet receipted.
  * Shared by the manual button and the automatic issue on recording a payment, so both
- * apply the same rules: an invoice must exist first, and the amount is this collection only.
+ * apply the same rules, and the amount is this collection only.
+ *
+ * A receipt acknowledges payment against an invoice, so the invoice must exist — and when it
+ * does not, it is raised here for the full instalment rather than refusing the receipt. The
+ * instalment schedule comes from the contract, not from invoices, so a payment can be settled
+ * long before anyone thinks to bill it; making the operator issue the invoice by hand first
+ * only meant collections went unreceipted.
  */
 export async function issueReceiptForPayment(paymentId: string, issuedById?: string): Promise<IssueReceiptResult> {
   const payment = await prisma.payment.findUnique({
@@ -80,13 +88,6 @@ export async function issueReceiptForPayment(paymentId: string, issuedById?: str
     include: { contract: { include: { unit: { include: { building: { include: { owner: true } } } } } } },
   });
   if (!payment) return { ok: false, error: "الدفعة غير موجودة" };
-
-  // A receipt acknowledges payment against an invoice, so the invoice has to come first.
-  const invoice = await prisma.financialDocument.findFirst({
-    where: { paymentId, type: "INVOICE", status: { not: "CANCELLED" } },
-    select: { id: true },
-  });
-  if (!invoice) return { ok: false, error: "لا يمكن إصدار سند قبض قبل إصدار فاتورة لهذه الدفعة" };
 
   if (!payment.paidAmount || payment.paidAmount <= 0) {
     return { ok: false, error: "لا يمكن إصدار سند قبض قبل تسجيل دفعة" };
@@ -97,7 +98,26 @@ export async function issueReceiptForPayment(paymentId: string, issuedById?: str
     return { ok: false, error: "تم إصدار سندات قبض بكامل المبلغ المحصّل لهذه الدفعة" };
   }
 
+  // The owner's tax registration decides whether both documents are tax documents.
   const taxNumber = payment.contract.unit.building.owner.taxNumber?.trim() || null;
+
+  const invoice = await prisma.financialDocument.findFirst({
+    where: { paymentId, type: "INVOICE", status: { not: "CANCELLED" } },
+    select: { documentNumber: true },
+  });
+
+  // The invoice is for the whole instalment; the receipt covers only what has been collected.
+  const raised = invoice
+    ? null
+    : await createDocumentWithNumber("INVOICE", {
+        status: "ISSUED",
+        amount: payment.amount,
+        hasTax: !!taxNumber,
+        taxNumber,
+        paymentId: payment.id,
+        contractId: payment.contract.id,
+        issuedById: issuedById ?? null,
+      });
 
   const doc = await createDocumentWithNumber("RECEIPT", {
     status: "ISSUED",
@@ -109,7 +129,7 @@ export async function issueReceiptForPayment(paymentId: string, issuedById?: str
     issuedById: issuedById ?? null,
   });
 
-  return { ok: true, documentNumber: doc.documentNumber };
+  return { ok: true, documentNumber: doc.documentNumber, ...(raised ? { invoiceNumber: raised.documentNumber } : {}) };
 }
 
 /**

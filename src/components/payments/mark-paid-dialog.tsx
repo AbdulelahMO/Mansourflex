@@ -92,7 +92,7 @@ export function MarkPaidDialog({ paymentId, amount }: { paymentId: string; amoun
         <span>
           إصدار سند قبض تلقائياً بالمبلغ المستلم
           <span className="mt-0.5 block text-xs text-muted-foreground">
-            يتطلب وجود فاتورة لهذه الدفعة. يمكنك حذف السند لاحقاً وإعادة إصداره عند الحاجة.
+            وتصدر معه فاتورة القسط إن لم تكن صدرت من قبل، فالسند إقرار بالسداد مقابلها.
           </span>
         </span>
       </label>

@@ -35,16 +35,15 @@ export function IssueDocumentButtons({
       ? `سبق إصدار الفاتورة ${invoiceNumber} لهذه الدفعة — يُسمح بفاتورة واحدة فقط لكل دفعة.`
       : null;
 
-  // A receipt needs its invoice issued first, an amount received, and some of it not yet receipted.
+  // A receipt needs an amount received and some of it not yet receipted. It no longer needs the
+  // invoice to exist first: one is raised with it when the instalment was never billed.
   const receiptBlockedReason = settled
     ? SETTLED_REASON
-    : !invoiceNumber
-      ? "يجب إصدار فاتورة لهذه الدفعة أولاً، ثم إصدار سند القبض."
-      : !canReceipt
-        ? "لم يُسجَّل أي مبلغ مدفوع على هذه الدفعة بعد."
-        : receiptableAmount <= 0
-          ? "تم إصدار سندات قبض بكامل المبلغ المحصّل لهذه الدفعة."
-          : null;
+    : !canReceipt
+      ? "لم يُسجَّل أي مبلغ مدفوع على هذه الدفعة بعد."
+      : receiptableAmount <= 0
+        ? "تم إصدار سندات قبض بكامل المبلغ المحصّل لهذه الدفعة."
+        : null;
 
   // A settled payment has nothing to refer, but an existing referral must stay cancellable
   // so a stale one can never be left stuck on a paid payment.

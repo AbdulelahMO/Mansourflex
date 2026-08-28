@@ -56,10 +56,25 @@ export async function createReceipt(paymentId: string): Promise<ActionState> {
   const res = await issueReceiptForPayment(paymentId, user.id);
   if (!res.ok) return { error: res.error };
 
+  // The invoice raised alongside the receipt is logged in its own right, so the register
+  // shows who issued it and why it appeared without anyone asking for it.
+  if (res.invoiceNumber) {
+    await recordAudit({
+      user,
+      action: "documents.issue",
+      summary: `إصدار الفاتورة ${res.invoiceNumber} تلقائياً مع سند القبض`,
+      targetId: paymentId,
+    });
+  }
   await recordAudit({ user, action: "documents.issue", summary: `إصدار سند القبض ${res.documentNumber}`, targetId: paymentId });
 
   revalidatePath(`/contracts/${payment.contract.id}`);
-  return { success: true, message: `تم إصدار سند القبض ${res.documentNumber}` };
+  return {
+    success: true,
+    message: res.invoiceNumber
+      ? `تم إصدار الفاتورة ${res.invoiceNumber} وسند القبض ${res.documentNumber}`
+      : `تم إصدار سند القبض ${res.documentNumber}`,
+  };
 }
 
 /** Financial documents are never removed — they are voided and keep their number as a trace. */

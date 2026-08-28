@@ -119,19 +119,26 @@ export async function markPaymentPaid(id: string, _prev: ActionState, formData: 
   // Recording money received and acknowledging it are one act — but only when an invoice
   // exists to receipt against. Never fail the payment itself over the receipt.
   const issued: string[] = [];
+  const invoiced: string[] = [];
   let firstFailure: string | null = null;
   for (const { payment: p } of allocations) {
     const receipt = await issueReceiptForPayment(p.id, user.id);
-    if (receipt.ok) issued.push(receipt.documentNumber);
-    else firstFailure ??= receipt.error;
+    if (!receipt.ok) {
+      firstFailure ??= receipt.error;
+      continue;
+    }
+    issued.push(receipt.documentNumber);
+    if (receipt.invoiceNumber) invoiced.push(receipt.invoiceNumber);
   }
 
   if (issued.length === 0) {
     return { success: true, message: `تم تسجيل الدفعة${carryMessage} — لم يُصدر سند: ${firstFailure}` };
   }
+  // An instalment that was never billed is invoiced now, so the receipt has its invoice.
+  const invoiceMessage = invoiced.length ? ` والفاتورة ${invoiced.join("، ")}` : "";
   return {
     success: true,
-    message: `تم تسجيل الدفعة${carryMessage} وإصدار سند القبض ${issued.join("، ")}`,
+    message: `تم تسجيل الدفعة${carryMessage} وإصدار سند القبض ${issued.join("، ")}${invoiceMessage}`,
   };
 }
 
