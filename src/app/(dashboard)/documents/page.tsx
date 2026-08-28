@@ -27,6 +27,17 @@ const TYPE_LABELS: Record<string, string> = {
   OWNER_REMITTANCE: "سند توريد",
 };
 
+/** Reads a month written as 2026-06 or 06/2026 into the range of days it covers. */
+function monthRange(q: string) {
+  const parts = q.split(/[-/]/).map(Number);
+  if (parts.length !== 2 || parts.some((n) => !Number.isInteger(n))) return null;
+
+  const [year, month] = parts[0] > 12 ? parts : [parts[1], parts[0]];
+  if (year < 1900 || year > 2200 || month < 1 || month > 12) return null;
+
+  return { from: new Date(year, month - 1, 1), to: new Date(year, month, 0, 23, 59, 59, 999) };
+}
+
 const TYPE_TONES: Record<string, string> = {
   INVOICE: "bg-sky-100 text-sky-700",
   RECEIPT: "bg-emerald-100 text-emerald-700",
@@ -45,6 +56,10 @@ export default async function FinancialDocumentsPage(props: PageProps<"/document
   const page = parsePage(params.page);
   const q = typeof params.q === "string" ? params.q.trim() : "";
   const type = TYPE_TABS.some((t) => t.key === params.type && t.key !== "all") ? String(params.type) : "all";
+
+  // A query written as a month — 2026-06 or 06/2026 — searches the instalment it falls in,
+  // since a due date cannot be matched by the Arabic month name the operator would type.
+  const month = monthRange(q);
 
   const filterParams: Record<string, string> = { ...(type !== "all" ? { type } : {}) };
   const extraParams: Record<string, string> = { ...filterParams, ...(q ? { q } : {}) };
@@ -70,6 +85,7 @@ export default async function FinancialDocumentsPage(props: PageProps<"/document
                 { expense: { building: { name: { contains: q } } } },
                 { remittance: { owner: { name: { contains: q } } } },
                 { remittance: { building: { name: { contains: q } } } },
+                ...(month ? [{ payment: { dueDate: { gte: month.from, lte: month.to } } }] : []),
               ],
             },
           ],
@@ -85,6 +101,7 @@ export default async function FinancialDocumentsPage(props: PageProps<"/document
       where,
       include: {
         contract: { select: { id: true, contractNumber: true, tenant: { select: { name: true } } } },
+        payment: { select: { id: true, contractId: true, dueDate: true } },
         expense: { select: { description: true, vendor: true, building: { select: { name: true } } } },
         remittance: { select: { owner: { select: { name: true } }, building: { select: { name: true } } } },
         issuedBy: { select: { name: true } },
@@ -96,6 +113,28 @@ export default async function FinancialDocumentsPage(props: PageProps<"/document
     // Totals cover the whole filtered set, not just the page in view.
     prisma.financialDocument.findMany({ where, select: { amount: true, type: true, status: true } }),
   ]);
+
+  // Where each instalment sits in its contract's schedule. Fetched for the whole page in one
+  // query — the position is an ordinal within the contract, not a column that can be selected.
+  const contractIds = [...new Set(documents.map((d) => d.payment?.contractId).filter(Boolean) as string[])];
+  const schedule = contractIds.length
+    ? await prisma.payment.findMany({
+        where: { contractId: { in: contractIds } },
+        select: { id: true, contractId: true },
+        orderBy: [{ contractId: "asc" }, { dueDate: "asc" }],
+      })
+    : [];
+
+  const position = new Map<string, { index: number; total: number }>();
+  const perContract = new Map<string, string[]>();
+  for (const p of schedule) {
+    const list = perContract.get(p.contractId) ?? [];
+    list.push(p.id);
+    perContract.set(p.contractId, list);
+  }
+  for (const ids of perContract.values()) {
+    ids.forEach((id, i) => position.set(id, { index: i + 1, total: ids.length }));
+  }
 
   // A cancelled document keeps its number in the list but counts for nothing.
   const sumOf = (t: string) =>
@@ -168,7 +207,7 @@ export default async function FinancialDocumentsPage(props: PageProps<"/document
       <SearchInput
         basePath="/documents"
         defaultValue={q}
-        placeholder="بحث برقم المستند أو العقد أو المستأجر أو المورّد أو المالك..."
+        placeholder="بحث برقم المستند أو العقد أو المستأجر أو المورّد أو المالك أو شهر القسط (2026-06)..."
         extraParams={filterParams}
       />
 
@@ -234,8 +273,18 @@ export default async function FinancialDocumentsPage(props: PageProps<"/document
                           ) : d.contract ? (
                             <>
                               <span className="font-medium">{d.contract.tenant.name}</span>
-                              <span className="block text-xs text-muted-foreground" dir="ltr">
-                                {d.contract.contractNumber}
+                              <span className="block text-xs text-muted-foreground">
+                                <span dir="ltr">{d.contract.contractNumber}</span>
+                                {d.payment && (
+                                  <>
+                                    {" · "}
+                                    {(() => {
+                                      const at = position.get(d.payment.id);
+                                      return at ? `القسط ${at.index} من ${at.total}` : "قسط";
+                                    })()}
+                                    {` · ${formatDate(d.payment.dueDate)}`}
+                                  </>
+                                )}
                               </span>
                             </>
                           ) : (
