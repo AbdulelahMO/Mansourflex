@@ -7,6 +7,11 @@ import type { Prisma } from "@prisma/client";
  */
 type Db = typeof prisma | Prisma.TransactionClient;
 
+/** Money is compared and stored to the halala; binary fractions must not decide a riyal. */
+export function round2(n: number) {
+  return Math.round(n * 100) / 100;
+}
+
 /**
  * Next sequence number for the type/year, derived from the highest number already issued —
  * not from the row count, which would reuse a number after any document is deleted and
@@ -71,7 +76,7 @@ export async function unreceiptedAmount(paymentId: string, paidAmount: number | 
     select: { amount: true },
   });
   const acknowledged = receipts.reduce((sum, r) => sum + r.amount, 0);
-  return Math.max(0, (paidAmount ?? 0) - acknowledged);
+  return Math.max(0, round2((paidAmount ?? 0) - acknowledged));
 }
 
 export type IssueReceiptResult =
@@ -118,12 +123,15 @@ export async function issueReceiptForPayment(
 
   // Never acknowledge more than has actually been collected and left unreceipted.
   const outstanding = await unreceiptedAmount(paymentId, payment.paidAmount, db);
-  const amount = Math.min(requested, outstanding);
+  const amount = round2(Math.min(requested, outstanding));
   if (amount <= 0) {
     return { ok: false, error: "تم إصدار سندات قبض بكامل المبلغ المحصّل لهذه الدفعة" };
   }
 
-  // The owner's tax registration decides whether both documents are tax documents.
+  // Whether these are tax documents is a property of the contract: its rate is what was added
+  // to every instalment. The owner's registration number is only what gets printed on them —
+  // a contract with VAT stays a tax document even while that number is still missing.
+  const hasTax = payment.contract.vatRate > 0;
   const taxNumber = payment.contract.unit.building.owner.taxNumber?.trim() || null;
 
   const invoice = await db.financialDocument.findFirst({
@@ -139,7 +147,7 @@ export async function issueReceiptForPayment(
         {
           status: "ISSUED",
           amount: payment.amount,
-          hasTax: !!taxNumber,
+          hasTax,
           taxNumber,
           paymentId: payment.id,
           contractId: payment.contract.id,
@@ -153,7 +161,7 @@ export async function issueReceiptForPayment(
     {
       status: "ISSUED",
       amount,
-      hasTax: !!taxNumber,
+      hasTax,
       taxNumber,
       paymentId: payment.id,
       contractId: payment.contract.id,

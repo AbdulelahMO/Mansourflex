@@ -29,12 +29,13 @@ export async function createInvoice(paymentId: string): Promise<ActionState> {
     return { error: `سبق إصدار فاتورة لهذه الدفعة (${existingInvoice.documentNumber})` };
   }
 
+  // The contract's rate decides whether this is a tax invoice; the owner's number is printed on it.
   const taxNumber = payment.contract.unit.building.owner.taxNumber?.trim() || null;
 
   const doc = await createDocumentWithNumber("INVOICE", {
     status: "ISSUED",
     amount: payment.amount,
-    hasTax: !!taxNumber,
+    hasTax: payment.contract.vatRate > 0,
     taxNumber,
     paymentId: payment.id,
     contractId: payment.contract.id,

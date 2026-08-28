@@ -29,11 +29,22 @@ export function CancelDocumentButton({
   action,
   description,
   cancelled,
+  permission = "documents.cancel",
+  title = "إلغاء المستند",
+  heading,
+  confirmLabel,
+  approvalNote = "إلغاء المستندات المالية يحتاج موافقة مدير النظام. اكتب السبب وسيُنفَّذ فور موافقته.",
 }: {
   documentNumber: string;
   action: (reason?: string) => Promise<ActionState>;
   description?: string;
   cancelled?: boolean;
+  /** Which permission gates it — a receipt is undone through its collection, not cancelled. */
+  permission?: string;
+  title?: string;
+  heading?: string;
+  confirmLabel?: string;
+  approvalNote?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
@@ -58,13 +69,13 @@ export function CancelDocumentButton({
   useEffect(() => {
     if (!open) return;
     let cancel = false;
-    getPermissionState("documents.cancel").then((s) => {
+    getPermissionState(permission).then((s) => {
       if (!cancel) setNeedsApproval(s === "APPROVE");
     });
     return () => {
       cancel = true;
     };
-  }, [open]);
+  }, [open, permission]);
 
   if (cancelled) {
     return <span className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">ملغى</span>;
@@ -73,18 +84,18 @@ export function CancelDocumentButton({
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger asChild>
-        <Button variant="ghost" size="icon" title="إلغاء المستند" className="text-destructive hover:text-destructive">
+        <Button variant="ghost" size="icon" title={title} className="text-destructive hover:text-destructive">
           <Ban className="size-4" />
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>
-            {needsApproval ? "طلب إلغاء المستند" : `إلغاء المستند ${documentNumber}`}
+            {needsApproval ? `طلب ${title}` : `${heading ?? title} ${documentNumber}`}
           </AlertDialogTitle>
           <AlertDialogDescription>
             {needsApproval
-              ? "إلغاء المستندات المالية يحتاج موافقة مدير النظام. اكتب السبب وسيُنفَّذ فور موافقته."
+              ? approvalNote
               : (description ??
                 "يبقى المستند برقمه مختوماً بـ«ملغى» مع سبب الإلغاء واسم من ألغاه، ويخرج من كل الحسابات والتقارير. لا يُحذف نهائياً.")}
           </AlertDialogDescription>
@@ -108,7 +119,7 @@ export function CancelDocumentButton({
               }}
               className="rounded-md bg-destructive px-4 py-2 text-sm text-white hover:bg-destructive/90"
             >
-              {needsApproval ? "إرسال الطلب" : "إلغاء المستند"}
+              {needsApproval ? "إرسال الطلب" : (confirmLabel ?? title)}
             </button>
           </AlertDialogAction>
         </AlertDialogFooter>

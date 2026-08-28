@@ -4,7 +4,8 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requirePermission, recordAudit } from "@/lib/authz";
-import { issueReceiptForPayment } from "@/lib/documents-core";
+import { issueReceiptForPayment, round2 } from "@/lib/documents-core";
+import { runSensitive } from "@/lib/approvals";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { ActionState } from "@/lib/types";
 
@@ -35,8 +36,10 @@ export async function markPaymentPaid(id: string, _prev: ActionState, formData: 
   }
 
   const paidDate = new Date(data.paidDate);
+  // Rounded to the halala: 1583.33 − 934 is 649.3299999999999 in binary, and paying the
+  // remainder exactly as the screen shows it would otherwise be rejected as an overpayment.
   const remainingOn = (p: { amount: number; paidAmount: number | null }) =>
-    Math.max(0, p.amount - (p.paidAmount ?? 0));
+    Math.max(0, round2(p.amount - (p.paidAmount ?? 0)));
 
   // Anything beyond this payment's remainder rolls onto the upcoming payments of the same
   // contract, oldest first. The plan is settled in full before anything is written, so an
@@ -54,18 +57,18 @@ export async function markPaymentPaid(id: string, _prev: ActionState, formData: 
   const allocations: { payment: typeof payment; add: number; carried: boolean }[] = [];
   let left = newlyPaid;
 
-  const firstAdd = Math.min(left, remainingOn(payment));
+  const firstAdd = round2(Math.min(left, remainingOn(payment)));
   if (firstAdd > 0) {
     allocations.push({ payment, add: firstAdd, carried: false });
-    left -= firstAdd;
+    left = round2(left - firstAdd);
   }
   for (const next of upcoming) {
     if (left <= 0) break;
     const room = remainingOn(next);
     if (room <= 0) continue;
-    const add = Math.min(left, room);
+    const add = round2(Math.min(left, room));
     allocations.push({ payment: next, add, carried: true });
-    left -= add;
+    left = round2(left - add);
   }
 
   if (left > 0) {
@@ -85,17 +88,29 @@ export async function markPaymentPaid(id: string, _prev: ActionState, formData: 
       const issued: { receipt: string; invoice?: string }[] = [];
 
       for (const { payment: p, add, carried } of allocations) {
-        const total = (p.paidAmount ?? 0) + add;
+        const total = round2((p.paidAmount ?? 0) + add);
+
+        // An instalment the surplus rolls onto may already carry a collection of its own, with
+        // its own method, reference and date. The carried amount is appended to its record —
+        // never written over it, which would erase how the earlier money arrived.
+        const held = (p.paidAmount ?? 0) > 0;
+        const details =
+          carried && held
+            ? { notes: [p.notes, carryNote].filter(Boolean).join(" — ") }
+            : {
+                paidDate,
+                collectedById: user.id,
+                method: data.method || null,
+                recipient: data.recipient ?? null,
+                reference: data.reference || null,
+                notes: carried ? carryNote : data.notes || null,
+              };
+
         await tx.payment.update({
           where: { id: p.id },
           data: {
             paidAmount: total,
-            paidDate,
-            collectedById: user.id,
-            method: data.method || null,
-            recipient: data.recipient ?? null,
-            reference: data.reference || null,
-            notes: carried ? carryNote : data.notes || null,
+            ...details,
             status: total >= p.amount ? "PAID" : "PARTIAL",
           },
         });
@@ -140,6 +155,11 @@ export async function markPaymentPaid(id: string, _prev: ActionState, formData: 
     success: true,
     message: `تم تسجيل الدفعة${carryMessage} وإصدار سند القبض ${receipts.join("، ")}${invoiceMessage}`,
   };
+}
+
+/** Undoes one collection: the receipt is voided and its amount taken back off the instalment. */
+export async function reverseCollection(receiptId: string, reason?: string): Promise<ActionState> {
+  return runSensitive("payments.reverse", { id: receiptId, reason }, reason);
 }
 
 export async function syncOverduePayments() {

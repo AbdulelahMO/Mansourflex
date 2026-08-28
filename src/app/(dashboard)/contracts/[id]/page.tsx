@@ -15,6 +15,7 @@ import { MarkPaidDialog } from "@/components/payments/mark-paid-dialog";
 import { IssueDocumentButtons } from "@/components/contracts/document-actions";
 import { DeleteButton } from "@/components/delete-button";
 import { cancelFinancialDocument } from "@/lib/actions/documents";
+import { reverseCollection } from "@/lib/actions/payments";
 import { CancelDocumentButton } from "@/components/documents/cancel-document-button";
 
 const AMOUNT_TYPE_LABELS: Record<string, string> = {
@@ -292,7 +293,8 @@ export default async function ContractDetailPage(props: PageProps<"/contracts/[i
                       <TableCell>
                         {d.hasTax ? (
                           <span dir="ltr" className="text-xs text-muted-foreground">
-                            ضريبية · {d.taxNumber}
+                            {/* A contract may carry VAT before the owner's registration number is on file. */}
+                            {d.taxNumber ? `ضريبية · ${d.taxNumber}` : "ضريبية · بلا رقم ضريبي للمالك"}
                           </span>
                         ) : (
                           <span className="text-xs text-muted-foreground">بدون ضريبة</span>
@@ -306,13 +308,28 @@ export default async function ContractDetailPage(props: PageProps<"/contracts/[i
                           <Button asChild variant="ghost" size="sm">
                             <Link href={`/documents/${d.id}`}>عرض</Link>
                           </Button>
-                          {canManage && (
-                            <CancelDocumentButton
-                              documentNumber={d.documentNumber}
-                              cancelled={d.status === "CANCELLED"}
-                              action={cancelFinancialDocument.bind(null, d.id)}
-                            />
-                          )}
+                          {canManage &&
+                            (d.type === "RECEIPT" ? (
+                              // A receipt is not voided on its own: undoing the collection takes
+                              // the money back off the instalment and the receipt goes with it.
+                              <CancelDocumentButton
+                                documentNumber={d.documentNumber}
+                                cancelled={d.status === "CANCELLED"}
+                                action={reverseCollection.bind(null, d.id)}
+                                permission="payments.reverse"
+                                title="التراجع عن التحصيل"
+                                heading="التراجع عن تحصيل السند"
+                                confirmLabel="تراجع عن التحصيل"
+                                approvalNote="التراجع عن التحصيل يحتاج موافقة مدير النظام. اكتب السبب وسيُنفَّذ فور موافقته."
+                                description={`يُخصم مبلغ السند من محصّل القسط ويُلغى السند ${d.documentNumber} معه، فيعود القسط إلى ما كان عليه قبل هذا التحصيل. يبقى السند برقمه مختوماً بـ«ملغى» مع السبب.`}
+                              />
+                            ) : (
+                              <CancelDocumentButton
+                                documentNumber={d.documentNumber}
+                                cancelled={d.status === "CANCELLED"}
+                                action={cancelFinancialDocument.bind(null, d.id)}
+                              />
+                            ))}
                         </div>
                       </TableCell>
                     </TableRow>

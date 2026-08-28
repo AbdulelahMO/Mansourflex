@@ -85,6 +85,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: "payments.view", label: "عرض التحصيل" },
       { key: "payments.pay", label: "تسجيل دفعة" },
       { key: "payments.edit", label: "تعديل دفعة" },
+      { key: "payments.reverse", label: "التراجع عن تحصيل وإلغاء سنده", sensitive: true },
     ],
   },
   {

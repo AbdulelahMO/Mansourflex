@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { buildSettlement } from "@/lib/settlement";
 import { buildingClosure, closureSummary, duesSummary } from "@/lib/core/building-closure";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { round2 } from "@/lib/documents-core";
 import type { ActionState } from "@/lib/types";
 
 /**
@@ -159,6 +160,14 @@ export const SENSITIVE_OPS: Record<string, SensitiveOp<never>> = {
       if (!doc) return missing("المستند");
       if (doc.status === "CANCELLED") return { error: `سبق إلغاء المستند ${doc.documentNumber}` };
 
+      // Voiding a receipt on its own would leave collected money with nothing acknowledging it,
+      // and no way to acknowledge it again. The receipt goes when its collection is reversed.
+      if (doc.type === "RECEIPT") {
+        return {
+          error: `سند القبض ${doc.documentNumber} يُلغى بالتراجع عن تحصيله — من صفحة العقد، فيُلغى السند مع المبلغ معاً.`,
+        };
+      }
+
       // A receipt stands on its invoice, so the invoice cannot be voided while one is live.
       if (doc.type === "INVOICE" && doc.paymentId) {
         const receipts = await prisma.financialDocument.findMany({
@@ -203,6 +212,85 @@ export const SENSITIVE_OPS: Record<string, SensitiveOp<never>> = {
       revalidatePath("/documents");
       revalidatePath("/expenses");
       return { success: true, message: `أُلغي المستند ${doc.documentNumber}` };
+    },
+  },
+
+  /**
+   * Reversing one collection: a receipt is one handover of money, so undoing it takes back
+   * exactly what that receipt acknowledged and voids the receipt with it. This is the only way
+   * a collection is unwound — and the only way a receipt is cancelled — so the books and the
+   * paperwork can never disagree about how much was received.
+   */
+  "payments.reverse": {
+    permission: "payments.reverse",
+    describe: async ({ id }: IdPayload) => {
+      const receipt = await prisma.financialDocument.findUnique({
+        where: { id },
+        select: { documentNumber: true, amount: true },
+      });
+      return receipt
+        ? `التراجع عن تحصيل ${formatCurrency(receipt.amount)} وإلغاء سنده ${receipt.documentNumber}`
+        : `التراجع عن تحصيل ${id}`;
+    },
+    run: async ({ id, reason }: { id: string; reason?: string }) => {
+      const receipt = await prisma.financialDocument.findUnique({
+        where: { id },
+        include: { payment: true },
+      });
+      if (!receipt || receipt.type !== "RECEIPT") return missing("سند القبض");
+      if (receipt.status === "CANCELLED") return { error: `سبق إلغاء السند ${receipt.documentNumber}` };
+      if (!receipt.payment) return { error: "السند غير مرتبط بدفعة" };
+
+      const payment = receipt.payment;
+      const remaining = round2((payment.paidAmount ?? 0) - receipt.amount);
+      if (remaining < 0) {
+        return { error: "مبلغ السند يتجاوز المحصّل على القسط — راجع سندات هذه الدفعة" };
+      }
+
+      const now = new Date();
+      await prisma.$transaction([
+        prisma.financialDocument.update({
+          where: { id },
+          data: {
+            status: "CANCELLED",
+            cancelledAt: now,
+            cancelReason: reason?.trim() || "التراجع عن التحصيل",
+          },
+        }),
+        prisma.payment.update({
+          where: { id: payment.id },
+          data: {
+            paidAmount: remaining > 0 ? remaining : null,
+            // With nothing left collected the instalment returns to awaiting payment, overdue
+            // if its date has passed; the collection details go with the money.
+            ...(remaining > 0
+              ? {}
+              : {
+                  paidDate: null,
+                  method: null,
+                  reference: null,
+                  recipient: null,
+                  collectedById: null,
+                }),
+            status:
+              remaining >= payment.amount
+                ? "PAID"
+                : remaining > 0
+                  ? "PARTIAL"
+                  : payment.dueDate < now
+                    ? "OVERDUE"
+                    : "PENDING",
+          },
+        }),
+      ]);
+
+      revalidatePath("/payments");
+      revalidatePath("/documents");
+      revalidatePath(`/contracts/${payment.contractId}`);
+      return {
+        success: true,
+        message: `تم التراجع عن تحصيل ${formatCurrency(receipt.amount)} وألغي سنده ${receipt.documentNumber}`,
+      };
     },
   },
 
