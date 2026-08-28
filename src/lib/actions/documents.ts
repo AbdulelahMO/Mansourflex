@@ -43,6 +43,7 @@ export async function createInvoice(paymentId: string): Promise<ActionState> {
 
   await recordAudit({ user, action: "documents.issue", summary: `إصدار الفاتورة ${doc.documentNumber}`, targetId: doc.id });
 
+  revalidatePath("/documents");
   revalidatePath(`/contracts/${payment.contract.id}`);
   return { success: true, message: "تم إصدار الفاتورة" };
 }
@@ -68,6 +69,7 @@ export async function createReceipt(paymentId: string): Promise<ActionState> {
   }
   await recordAudit({ user, action: "documents.issue", summary: `إصدار سند القبض ${res.documentNumber}`, targetId: paymentId });
 
+  revalidatePath("/documents");
   revalidatePath(`/contracts/${payment.contract.id}`);
   return {
     success: true,

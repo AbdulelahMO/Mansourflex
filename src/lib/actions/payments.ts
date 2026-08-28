@@ -122,6 +122,7 @@ export async function markPaymentPaid(id: string, _prev: ActionState, formData: 
   });
 
   revalidatePath("/payments");
+  revalidatePath("/documents"); // كل تحصيل يُصدر سنده، فالسجل يتغيّر معه
   revalidatePath(`/contracts/${payment.contractId}`);
 
   const carried = allocations.filter((a) => a.carried);
