@@ -23,6 +23,12 @@ const AMOUNT_TYPE_LABELS: Record<string, string> = {
   INCREASING: "متزايد",
 };
 
+/** Who took the money in: the operator on the owner's behalf, or the owner directly. */
+const RECIPIENT_LABELS: Record<string, string> = {
+  OPERATOR: "المشغل",
+  OWNER: "المالك",
+};
+
 const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   INVOICE: "فاتورة",
   RECEIPT: "سند قبض",
@@ -76,6 +82,7 @@ export default async function ContractDetailPage(props: PageProps<"/contracts/[i
 
   // Receipts are issued against an invoice, so that invoice stays locked until they are removed.
   const receiptsByPaymentId = new Map<string, string[]>();
+  const recipientByPaymentId = new Map(contract.payments.map((p) => [p.id, p.recipient]));
   const receiptedByPaymentId = new Map<string, number>();
   for (const d of contract.documents) {
     if (d.type !== "RECEIPT" || !d.paymentId) continue;
@@ -256,6 +263,7 @@ export default async function ContractDetailPage(props: PageProps<"/contracts/[i
                     <TableHead>النوع</TableHead>
                     <TableHead>التاريخ</TableHead>
                     <TableHead>المبلغ</TableHead>
+                    <TableHead>المستلم</TableHead>
                     <TableHead>الضريبة</TableHead>
                     <TableHead>الحالة</TableHead>
                     <TableHead className="w-32">خيارات</TableHead>
@@ -270,6 +278,12 @@ export default async function ContractDetailPage(props: PageProps<"/contracts/[i
                       <TableCell>{DOCUMENT_TYPE_LABELS[d.type]}</TableCell>
                       <TableCell>{formatDate(d.issueDate)}</TableCell>
                       <TableCell>{formatCurrency(d.amount)}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {(() => {
+                          const recipient = d.paymentId ? recipientByPaymentId.get(d.paymentId) : null;
+                          return recipient ? RECIPIENT_LABELS[recipient] : "—";
+                        })()}
+                      </TableCell>
                       <TableCell>
                         {d.hasTax ? (
                           <span dir="ltr" className="text-xs text-muted-foreground">
