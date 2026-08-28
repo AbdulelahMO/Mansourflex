@@ -230,8 +230,6 @@ export default async function ContractDetailPage(props: PageProps<"/contracts/[i
                             {p.status !== "PAID" && <MarkPaidDialog paymentId={p.id} amount={remaining} />}
                             <IssueDocumentButtons
                               paymentId={p.id}
-                              canReceipt={(p.paidAmount ?? 0) > 0}
-                              receiptableAmount={(p.paidAmount ?? 0) - (receiptedByPaymentId.get(p.id) ?? 0)}
                               settled={
                                 p.status === "PAID" &&
                                 (receiptsByPaymentId.get(p.id)?.length ?? 0) > 0 &&

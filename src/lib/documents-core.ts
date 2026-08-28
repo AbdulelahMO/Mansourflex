@@ -101,11 +101,10 @@ export async function issueReceiptForPayment(
     /**
      * What this act of collection brought in. A receipt acknowledges one handover of money,
      * so recording 200 then 300 then 500 leaves three receipts of 200, 300 and 500 — never one
-     * for the running total. Omitted by the manual button, which acknowledges whatever has been
-     * collected and not yet receipted.
+     * for the running total. Required: there is no caller that means "whatever has piled up".
      */
-    amount?: number;
-  } = {}
+    amount: number;
+  }
 ): Promise<IssueReceiptResult> {
   const payment = await db.payment.findUnique({
     where: { id: paymentId },
@@ -119,7 +118,7 @@ export async function issueReceiptForPayment(
 
   // Never acknowledge more than has actually been collected and left unreceipted.
   const outstanding = await unreceiptedAmount(paymentId, payment.paidAmount, db);
-  const amount = requested === undefined ? outstanding : Math.min(requested, outstanding);
+  const amount = Math.min(requested, outstanding);
   if (amount <= 0) {
     return { ok: false, error: "تم إصدار سندات قبض بكامل المبلغ المحصّل لهذه الدفعة" };
   }

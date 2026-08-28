@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission, recordAudit } from "@/lib/authz";
 import { runSensitive } from "@/lib/approvals";
 import type { ActionState } from "@/lib/types";
-import { createDocumentWithNumber, issueReceiptForPayment } from "@/lib/documents-core";
+import { createDocumentWithNumber } from "@/lib/documents-core";
 
 async function loadPaymentWithOwner(paymentId: string) {
   return prisma.payment.findUnique({
@@ -46,37 +46,6 @@ export async function createInvoice(paymentId: string): Promise<ActionState> {
   revalidatePath("/documents");
   revalidatePath(`/contracts/${payment.contract.id}`);
   return { success: true, message: "تم إصدار الفاتورة" };
-}
-
-export async function createReceipt(paymentId: string): Promise<ActionState> {
-  const { user } = await requirePermission("documents.issue");
-
-  const payment = await loadPaymentWithOwner(paymentId);
-  if (!payment) return { error: "الدفعة غير موجودة" };
-
-  const res = await issueReceiptForPayment(paymentId, { issuedById: user.id });
-  if (!res.ok) return { error: res.error };
-
-  // The invoice raised alongside the receipt is logged in its own right, so the register
-  // shows who issued it and why it appeared without anyone asking for it.
-  if (res.invoiceNumber) {
-    await recordAudit({
-      user,
-      action: "documents.issue",
-      summary: `إصدار الفاتورة ${res.invoiceNumber} تلقائياً مع سند القبض`,
-      targetId: paymentId,
-    });
-  }
-  await recordAudit({ user, action: "documents.issue", summary: `إصدار سند القبض ${res.documentNumber}`, targetId: paymentId });
-
-  revalidatePath("/documents");
-  revalidatePath(`/contracts/${payment.contract.id}`);
-  return {
-    success: true,
-    message: res.invoiceNumber
-      ? `تم إصدار الفاتورة ${res.invoiceNumber} وسند القبض ${res.documentNumber}`
-      : `تم إصدار سند القبض ${res.documentNumber}`,
-  };
 }
 
 /** Financial documents are never removed — they are voided and keep their number as a trace. */

@@ -3,22 +3,17 @@
 import { useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { FileText, Receipt, Ban } from "lucide-react";
-import { createInvoice, createReceipt } from "@/lib/actions/documents";
+import { FileText, Ban } from "lucide-react";
+import { createInvoice } from "@/lib/actions/documents";
 import { referPaymentToNajiz, cancelNajizReferral } from "@/lib/actions/najiz";
 
 export function IssueDocumentButtons({
   paymentId,
-  canReceipt,
-  receiptableAmount,
   invoiceNumber,
   settled,
   najizReferredAt,
 }: {
   paymentId: string;
-  canReceipt: boolean;
-  /** Collected amount not yet covered by a receipt. */
-  receiptableAmount: number;
   /** Number of the invoice already issued for this payment, if any — only one is allowed. */
   invoiceNumber: string | null;
   /** Paid in full and fully receipted — the payment's cycle is closed. */
@@ -35,15 +30,8 @@ export function IssueDocumentButtons({
       ? `سبق إصدار الفاتورة ${invoiceNumber} لهذه الدفعة — يُسمح بفاتورة واحدة فقط لكل دفعة.`
       : null;
 
-  // A receipt needs an amount received and some of it not yet receipted. It no longer needs the
-  // invoice to exist first: one is raised with it when the instalment was never billed.
-  const receiptBlockedReason = settled
-    ? SETTLED_REASON
-    : !canReceipt
-      ? "لم يُسجَّل أي مبلغ مدفوع على هذه الدفعة بعد."
-      : receiptableAmount <= 0
-        ? "تم إصدار سندات قبض بكامل المبلغ المحصّل لهذه الدفعة."
-        : null;
+  // There is no button for a receipt: recording the collection issues it, and issuing one by
+  // hand could only acknowledge a lump of past collections as if it were a single handover.
 
   // A settled payment has nothing to refer, but an existing referral must stay cancellable
   // so a stale one can never be left stuck on a paid payment.
@@ -57,18 +45,6 @@ export function IssueDocumentButtons({
     }
     startTransition(async () => {
       const res = await createInvoice(paymentId);
-      if (res.error) toast.error(res.error);
-      else toast.success(res.message);
-    });
-  }
-
-  function issueReceipt() {
-    if (receiptBlockedReason) {
-      toast.error("لا يمكن إصدار سند قبض", { description: receiptBlockedReason });
-      return;
-    }
-    startTransition(async () => {
-      const res = await createReceipt(paymentId);
       if (res.error) toast.error(res.error);
       else toast.success(res.message);
     });
@@ -98,17 +74,6 @@ export function IssueDocumentButtons({
       >
         <FileText className="size-4" />
         {invoiceBlockedReason && <Ban className="absolute end-0.5 bottom-0.5 size-2.5 text-destructive" />}
-      </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        disabled={pending}
-        onClick={issueReceipt}
-        title={receiptBlockedReason ?? "إصدار سند قبض"}
-        className={receiptBlockedReason ? "relative text-muted-foreground/50" : ""}
-      >
-        <Receipt className="size-4" />
-        {receiptBlockedReason && <Ban className="absolute end-0.5 bottom-0.5 size-2.5 text-destructive" />}
       </Button>
       <Button
         size="sm"
