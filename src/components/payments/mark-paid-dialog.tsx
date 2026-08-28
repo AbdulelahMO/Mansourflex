@@ -81,21 +81,11 @@ export function MarkPaidDialog({ paymentId, amount }: { paymentId: string; amoun
         <Label htmlFor="notes">ملاحظات</Label>
         <Textarea id="notes" name="notes" />
       </div>
-      <label className="flex items-start gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
-        <input
-          type="checkbox"
-          id="issueReceipt"
-          name="issueReceipt"
-          defaultChecked
-          className="mt-0.5 size-4 accent-primary"
-        />
-        <span>
-          إصدار سند قبض تلقائياً بالمبلغ المستلم
-          <span className="mt-0.5 block text-xs text-muted-foreground">
-            وتصدر معه فاتورة القسط إن لم تكن صدرت من قبل، فالسند إقرار بالسداد مقابلها.
-          </span>
-        </span>
-      </label>
+      {/* Not an option: money is not recorded without the paper that acknowledges it. */}
+      <p className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+        يصدر سند قبض بالمبلغ المستلم مع تسجيل الدفعة، وتصدر معه فاتورة القسط إن لم تكن صدرت — فالسند إقرار
+        بالسداد مقابلها. وإن تعذّر إصدار السند لم تُسجَّل الدفعة.
+      </p>
     </FormDialog>
   );
 }

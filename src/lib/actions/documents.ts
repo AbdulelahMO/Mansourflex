@@ -53,7 +53,7 @@ export async function createReceipt(paymentId: string): Promise<ActionState> {
   const payment = await loadPaymentWithOwner(paymentId);
   if (!payment) return { error: "الدفعة غير موجودة" };
 
-  const res = await issueReceiptForPayment(paymentId, user.id);
+  const res = await issueReceiptForPayment(paymentId, { issuedById: user.id });
   if (!res.ok) return { error: res.error };
 
   // The invoice raised alongside the receipt is logged in its own right, so the register

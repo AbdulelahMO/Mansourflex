@@ -2,6 +2,12 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 
 /**
+ * Either the client or a transaction handle. Issuing documents alongside the collection they
+ * acknowledge has to happen in one transaction: money is never recorded without its receipt.
+ */
+type Db = typeof prisma | Prisma.TransactionClient;
+
+/**
  * Next sequence number for the type/year, derived from the highest number already issued —
  * not from the row count, which would reuse a number after any document is deleted and
  * collide with the `documentNumber` unique constraint.
@@ -15,12 +21,12 @@ const NUMBER_PREFIX: Record<DocumentKind, string> = {
   OWNER_REMITTANCE: "REM",
 };
 
-export async function nextDocumentNumber(type: DocumentKind) {
+export async function nextDocumentNumber(type: DocumentKind, db: Db = prisma) {
   const prefix = NUMBER_PREFIX[type];
   const year = new Date().getFullYear();
   const scope = `${prefix}-${year}-`;
 
-  const issued = await prisma.financialDocument.findMany({
+  const issued = await db.financialDocument.findMany({
     where: { type, documentNumber: { startsWith: scope } },
     select: { documentNumber: true },
   });
@@ -39,12 +45,13 @@ export async function nextDocumentNumber(type: DocumentKind) {
  */
 export async function createDocumentWithNumber(
   type: DocumentKind,
-  data: Omit<Prisma.FinancialDocumentUncheckedCreateInput, "documentNumber" | "type">
+  data: Omit<Prisma.FinancialDocumentUncheckedCreateInput, "documentNumber" | "type">,
+  db: Db = prisma
 ) {
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
-      return await prisma.financialDocument.create({
-        data: { ...data, type, documentNumber: await nextDocumentNumber(type) },
+      return await db.financialDocument.create({
+        data: { ...data, type, documentNumber: await nextDocumentNumber(type, db) },
       });
     } catch (err) {
       const code = (err as { code?: string }).code;
@@ -58,8 +65,8 @@ export async function createDocumentWithNumber(
  * Amount still awaiting a receipt on a payment: what has been collected minus what
  * previous receipts already acknowledged. Receipts must sum to `paidAmount`, never exceed it.
  */
-export async function unreceiptedAmount(paymentId: string, paidAmount: number | null) {
-  const receipts = await prisma.financialDocument.findMany({
+export async function unreceiptedAmount(paymentId: string, paidAmount: number | null, db: Db = prisma) {
+  const receipts = await db.financialDocument.findMany({
     where: { paymentId, type: "RECEIPT", status: { not: "CANCELLED" } },
     select: { amount: true },
   });
@@ -82,8 +89,25 @@ export type IssueReceiptResult =
  * long before anyone thinks to bill it; making the operator issue the invoice by hand first
  * only meant collections went unreceipted.
  */
-export async function issueReceiptForPayment(paymentId: string, issuedById?: string): Promise<IssueReceiptResult> {
-  const payment = await prisma.payment.findUnique({
+export async function issueReceiptForPayment(
+  paymentId: string,
+  {
+    issuedById,
+    db = prisma,
+    amount: requested,
+  }: {
+    issuedById?: string;
+    db?: Db;
+    /**
+     * What this act of collection brought in. A receipt acknowledges one handover of money,
+     * so recording 200 then 300 then 500 leaves three receipts of 200, 300 and 500 — never one
+     * for the running total. Omitted by the manual button, which acknowledges whatever has been
+     * collected and not yet receipted.
+     */
+    amount?: number;
+  } = {}
+): Promise<IssueReceiptResult> {
+  const payment = await db.payment.findUnique({
     where: { id: paymentId },
     include: { contract: { include: { unit: { include: { building: { include: { owner: true } } } } } } },
   });
@@ -93,7 +117,9 @@ export async function issueReceiptForPayment(paymentId: string, issuedById?: str
     return { ok: false, error: "لا يمكن إصدار سند قبض قبل تسجيل دفعة" };
   }
 
-  const amount = await unreceiptedAmount(paymentId, payment.paidAmount);
+  // Never acknowledge more than has actually been collected and left unreceipted.
+  const outstanding = await unreceiptedAmount(paymentId, payment.paidAmount, db);
+  const amount = requested === undefined ? outstanding : Math.min(requested, outstanding);
   if (amount <= 0) {
     return { ok: false, error: "تم إصدار سندات قبض بكامل المبلغ المحصّل لهذه الدفعة" };
   }
@@ -101,7 +127,7 @@ export async function issueReceiptForPayment(paymentId: string, issuedById?: str
   // The owner's tax registration decides whether both documents are tax documents.
   const taxNumber = payment.contract.unit.building.owner.taxNumber?.trim() || null;
 
-  const invoice = await prisma.financialDocument.findFirst({
+  const invoice = await db.financialDocument.findFirst({
     where: { paymentId, type: "INVOICE", status: { not: "CANCELLED" } },
     select: { documentNumber: true },
   });
@@ -109,25 +135,33 @@ export async function issueReceiptForPayment(paymentId: string, issuedById?: str
   // The invoice is for the whole instalment; the receipt covers only what has been collected.
   const raised = invoice
     ? null
-    : await createDocumentWithNumber("INVOICE", {
-        status: "ISSUED",
-        amount: payment.amount,
-        hasTax: !!taxNumber,
-        taxNumber,
-        paymentId: payment.id,
-        contractId: payment.contract.id,
-        issuedById: issuedById ?? null,
-      });
+    : await createDocumentWithNumber(
+        "INVOICE",
+        {
+          status: "ISSUED",
+          amount: payment.amount,
+          hasTax: !!taxNumber,
+          taxNumber,
+          paymentId: payment.id,
+          contractId: payment.contract.id,
+          issuedById: issuedById ?? null,
+        },
+        db
+      );
 
-  const doc = await createDocumentWithNumber("RECEIPT", {
-    status: "ISSUED",
-    amount,
-    hasTax: !!taxNumber,
-    taxNumber,
-    paymentId: payment.id,
-    contractId: payment.contract.id,
-    issuedById: issuedById ?? null,
-  });
+  const doc = await createDocumentWithNumber(
+    "RECEIPT",
+    {
+      status: "ISSUED",
+      amount,
+      hasTax: !!taxNumber,
+      taxNumber,
+      paymentId: payment.id,
+      contractId: payment.contract.id,
+      issuedById: issuedById ?? null,
+    },
+    db
+  );
 
   return { ok: true, documentNumber: doc.documentNumber, ...(raised ? { invoiceNumber: raised.documentNumber } : {}) };
 }

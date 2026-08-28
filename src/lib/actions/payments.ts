@@ -15,7 +15,6 @@ const markPaidSchema = z.object({
   recipient: z.enum(["OPERATOR", "OWNER"]).optional(),
   reference: z.string().trim().optional().or(z.literal("")),
   notes: z.string().trim().optional().or(z.literal("")),
-  issueReceipt: z.string().optional(),
 });
 
 export async function markPaymentPaid(id: string, _prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -76,24 +75,44 @@ export async function markPaymentPaid(id: string, _prev: ActionState, formData: 
   }
 
   const carryNote = `مبلغ مرحّل من دفعة ${formatDate(payment.dueDate)}`;
-  await prisma.$transaction(
-    allocations.map(({ payment: p, add, carried }) => {
-      const total = (p.paidAmount ?? 0) + add;
-      return prisma.payment.update({
-        where: { id: p.id },
-        data: {
-          paidAmount: total,
-          paidDate,
-          collectedById: user.id,
-          method: data.method || null,
-          recipient: data.recipient ?? null,
-          reference: data.reference || null,
-          notes: carried ? carryNote : data.notes || null,
-          status: total >= p.amount ? "PAID" : "PARTIAL",
-        },
-      });
-    })
-  );
+
+  // Not one riyal is recorded without its receipt: the collection and the documents that
+  // acknowledge it are written in a single transaction, so a receipt that cannot be issued
+  // leaves the payment unrecorded rather than money standing in the books unacknowledged.
+  let documents: { receipt: string; invoice?: string }[];
+  try {
+    documents = await prisma.$transaction(async (tx) => {
+      const issued: { receipt: string; invoice?: string }[] = [];
+
+      for (const { payment: p, add, carried } of allocations) {
+        const total = (p.paidAmount ?? 0) + add;
+        await tx.payment.update({
+          where: { id: p.id },
+          data: {
+            paidAmount: total,
+            paidDate,
+            collectedById: user.id,
+            method: data.method || null,
+            recipient: data.recipient ?? null,
+            reference: data.reference || null,
+            notes: carried ? carryNote : data.notes || null,
+            status: total >= p.amount ? "PAID" : "PARTIAL",
+          },
+        });
+
+        // The receipt is for this collection alone, not for whatever the instalment has
+        // gathered before it — each handover of money gets its own acknowledgement.
+        const receipt = await issueReceiptForPayment(p.id, { issuedById: user.id, db: tx, amount: add });
+        if (!receipt.ok) throw new Error(receipt.error);
+        issued.push({ receipt: receipt.documentNumber, invoice: receipt.invoiceNumber });
+      }
+
+      return issued;
+    });
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : "خطأ غير متوقع";
+    return { error: `لم تُسجَّل الدفعة — تعذّر إصدار سند القبض: ${reason}` };
+  }
 
   await recordAudit({
     user,
@@ -112,33 +131,13 @@ export async function markPaymentPaid(id: string, _prev: ActionState, formData: 
       }`
     : "";
 
-  if (data.issueReceipt !== "on") {
-    return { success: true, message: `تم تسجيل الدفعة${carryMessage}` };
-  }
-
-  // Recording money received and acknowledging it are one act — but only when an invoice
-  // exists to receipt against. Never fail the payment itself over the receipt.
-  const issued: string[] = [];
-  const invoiced: string[] = [];
-  let firstFailure: string | null = null;
-  for (const { payment: p } of allocations) {
-    const receipt = await issueReceiptForPayment(p.id, user.id);
-    if (!receipt.ok) {
-      firstFailure ??= receipt.error;
-      continue;
-    }
-    issued.push(receipt.documentNumber);
-    if (receipt.invoiceNumber) invoiced.push(receipt.invoiceNumber);
-  }
-
-  if (issued.length === 0) {
-    return { success: true, message: `تم تسجيل الدفعة${carryMessage} — لم يُصدر سند: ${firstFailure}` };
-  }
+  const receipts = documents.map((d) => d.receipt);
+  const invoices = documents.map((d) => d.invoice).filter(Boolean) as string[];
   // An instalment that was never billed is invoiced now, so the receipt has its invoice.
-  const invoiceMessage = invoiced.length ? ` والفاتورة ${invoiced.join("، ")}` : "";
+  const invoiceMessage = invoices.length ? ` والفاتورة ${invoices.join("، ")}` : "";
   return {
     success: true,
-    message: `تم تسجيل الدفعة${carryMessage} وإصدار سند القبض ${issued.join("، ")}${invoiceMessage}`,
+    message: `تم تسجيل الدفعة${carryMessage} وإصدار سند القبض ${receipts.join("، ")}${invoiceMessage}`,
   };
 }
 
