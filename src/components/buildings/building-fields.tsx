@@ -165,7 +165,7 @@ function DeedIssueDateField({ defaultValue }: { defaultValue?: string | Date | n
               type="button"
               onClick={() => setCalendar(key)}
               className={
-                "rounded px-2 py-0.5 font-medium " +
+                "rounded px-3 py-0.5 font-medium max-md:min-h-9 " +
                 (calendar === key ? "bg-background shadow-sm" : "text-muted-foreground")
               }
             >

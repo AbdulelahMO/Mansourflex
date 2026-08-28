@@ -181,3 +181,85 @@
     break-inside: avoid;
   }
 }
+
+/*
+ * A wide table on a phone is read sideways, which nobody does. Below the tablet breakpoint each
+ * record's row becomes its own card and every value carries the column heading it belongs to,
+ * so the whole record is legible in one downward read. The captions come from `data-label`,
+ * which the Table component fills in from the header row.
+ */
+@media screen and (max-width: 767px) {
+  table[data-stacked] thead {
+    display: none;
+  }
+
+  table[data-stacked],
+  table[data-stacked] tbody,
+  table[data-stacked] tfoot,
+  table[data-stacked] tr {
+    display: block;
+    width: 100%;
+  }
+
+  table[data-stacked] tr {
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    margin-block-end: 0.5rem;
+    background: var(--card);
+  }
+
+  /* The alternating tint reads as stripes on a list of cards, and the last row keeps its border. */
+  table[data-stacked] tbody > tr:nth-child(even) {
+    background: var(--card);
+  }
+
+  table[data-stacked] tbody > tr:last-child {
+    border: 1px solid var(--border);
+  }
+
+  table[data-stacked] td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border: 0;
+    padding: 0.3rem 0;
+    white-space: normal;
+    text-align: start;
+  }
+
+  table[data-stacked] td + td {
+    border-top: 1px solid color-mix(in oklab, var(--border) 55%, transparent);
+  }
+
+  /* Each line of a card is a comfortable target, and a link inside it fills that height. */
+  table[data-stacked] td {
+    min-height: 2.75rem;
+  }
+
+  table[data-stacked] td > a {
+    display: flex;
+    align-items: center;
+    align-self: stretch;
+  }
+
+  table[data-stacked] td[data-label]::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    color: var(--muted-foreground);
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  /* An empty caption would still push the value off-centre. */
+  table[data-stacked] td[data-label=""]::before {
+    content: none;
+  }
+
+  /* A cell spanning the row — an empty-state message, or a nested detail panel — stays full width. */
+  table[data-stacked] td[colspan] {
+    display: block;
+    padding: 0.5rem 0;
+  }
+}

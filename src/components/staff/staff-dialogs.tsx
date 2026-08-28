@@ -9,7 +9,7 @@ import { createEmployee, updateEmployee, createRole, updateRole } from "@/lib/ac
 import { Plus, Pencil } from "lucide-react";
 
 const selectClass =
-  "h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring";
+  "h-11 w-full rounded-lg border md:h-9 border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring";
 
 type RoleOption = { id: string; name: string };
 

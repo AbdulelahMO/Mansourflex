@@ -80,7 +80,7 @@ export function RemittanceDialog({
             id={`method-${buildingId}`}
             name="method"
             defaultValue={METHOD_OPTIONS[0]}
-            className="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring"
+            className="h-11 w-full rounded-lg border md:h-9 border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring"
           >
             {METHOD_OPTIONS.map((m) => (
               <option key={m} value={m}>

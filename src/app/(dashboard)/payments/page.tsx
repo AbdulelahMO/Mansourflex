@@ -110,7 +110,7 @@ export default async function PaymentsPage(props: PageProps<"/payments">) {
             key={tab.key}
             href={tab.key === "all" ? "/payments" : `/payments?status=${tab.key}`}
             className={cn(
-              "rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap",
+              "flex items-center rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap max-md:min-h-11",
               activeTab === tab.key ? "bg-background shadow-sm" : "text-muted-foreground"
             )}
           >

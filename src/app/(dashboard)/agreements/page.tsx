@@ -96,7 +96,7 @@ export default async function AgreementsPage(props: PageProps<"/agreements">) {
               key={tab.key}
               href={`/agreements${qs ? `?${qs}` : ""}`}
               className={cn(
-                "rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap",
+                "flex items-center rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap max-md:min-h-11",
                 activeStatus === tab.key ? "bg-background shadow-sm" : "text-muted-foreground"
               )}
             >

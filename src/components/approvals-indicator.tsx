@@ -23,7 +23,7 @@ export function ApprovalsIndicator({ count, isDecider }: { count: number; isDeci
       title={label}
       aria-label={label}
       className={cn(
-        "relative flex size-9 items-center justify-center rounded-lg transition-colors",
+        "relative flex size-11 items-center justify-center rounded-lg transition-colors md:size-9",
         count > 0 ? "text-amber-700 hover:bg-amber-50" : "text-muted-foreground hover:bg-muted hover:text-foreground"
       )}
     >

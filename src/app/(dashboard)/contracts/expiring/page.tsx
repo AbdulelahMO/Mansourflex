@@ -96,7 +96,7 @@ export default async function ExpiringContractsPage(props: PageProps<"/contracts
               key={tab.key || "all"}
               href={`/contracts/expiring${qs ? `?${qs}` : ""}`}
               className={cn(
-                "rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap",
+                "flex items-center rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap max-md:min-h-11",
                 (bucket ?? "") === tab.key ? "bg-background shadow-sm" : "text-muted-foreground"
               )}
             >
