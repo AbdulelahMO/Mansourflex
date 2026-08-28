@@ -23,11 +23,6 @@ const AMOUNT_TYPE_LABELS: Record<string, string> = {
   INCREASING: "متزايد",
 };
 
-const RECIPIENT_LABELS: Record<string, string> = {
-  OPERATOR: "المشغل",
-  OWNER: "المالك",
-};
-
 const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   INVOICE: "فاتورة",
   RECEIPT: "سند قبض",
@@ -191,7 +186,6 @@ export default async function ContractDetailPage(props: PageProps<"/contracts/[i
                   <TableHead>المتبقي</TableHead>
                   <TableHead>الحالة</TableHead>
                   <TableHead>تاريخ الدفع</TableHead>
-                  <TableHead>المستلم</TableHead>
                   {canManage && <TableHead className="w-52">خيارات</TableHead>}
                 </TableRow>
               </TableHeader>
@@ -218,12 +212,6 @@ export default async function ContractDetailPage(props: PageProps<"/contracts/[i
                         </div>
                       </TableCell>
                       <TableCell>{p.paidDate ? formatDate(p.paidDate) : "—"}</TableCell>
-                      <TableCell>
-                        {p.recipient ? RECIPIENT_LABELS[p.recipient] : "—"}
-                        {p.collectedBy && (
-                          <span className="block text-xs text-muted-foreground">حصّلها {p.collectedBy.name}</span>
-                        )}
-                      </TableCell>
                       {canManage && (
                         <TableCell>
                           <div className="flex items-center justify-end gap-1">

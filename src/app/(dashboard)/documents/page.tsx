@@ -38,6 +38,12 @@ function monthRange(q: string) {
   return { from: new Date(year, month - 1, 1), to: new Date(year, month, 0, 23, 59, 59, 999) };
 }
 
+/** Who took the money in: the operator on the owner's behalf, or the owner directly. */
+const RECIPIENT_LABELS: Record<string, string> = {
+  OPERATOR: "المشغل",
+  OWNER: "المالك",
+};
+
 const TYPE_TONES: Record<string, string> = {
   INVOICE: "bg-sky-100 text-sky-700",
   RECEIPT: "bg-emerald-100 text-emerald-700",
@@ -101,7 +107,7 @@ export default async function FinancialDocumentsPage(props: PageProps<"/document
       where,
       include: {
         contract: { select: { id: true, contractNumber: true, tenant: { select: { name: true } } } },
-        payment: { select: { id: true, contractId: true, dueDate: true } },
+        payment: { select: { id: true, contractId: true, dueDate: true, recipient: true } },
         expense: { select: { description: true, vendor: true, building: { select: { name: true } } } },
         remittance: { select: { owner: { select: { name: true } }, building: { select: { name: true } } } },
         issuedBy: { select: { name: true } },
@@ -233,6 +239,7 @@ export default async function FinancialDocumentsPage(props: PageProps<"/document
                       <TableHead>التاريخ</TableHead>
                       <TableHead>البيان</TableHead>
                       <TableHead className="text-left">المبلغ</TableHead>
+                      <TableHead>المستلم</TableHead>
                       <TableHead>أصدره</TableHead>
                       <TableHead>خيارات</TableHead>
                     </TableRow>
@@ -298,6 +305,9 @@ export default async function FinancialDocumentsPage(props: PageProps<"/document
                           )}
                         >
                           {formatCurrency(d.amount)}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {d.payment?.recipient ? RECIPIENT_LABELS[d.payment.recipient] : "—"}
                         </TableCell>
                         <TableCell className="text-muted-foreground">{d.issuedBy?.name ?? "—"}</TableCell>
                         <TableCell>
