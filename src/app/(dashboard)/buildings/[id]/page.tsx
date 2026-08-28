@@ -82,15 +82,15 @@ export default async function BuildingDetailPage(props: PageProps<"/buildings/[i
         </div>
       )}
 
-      <div className="flex items-start justify-between gap-3">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold">{building.name}</h1>
           <p className="text-sm text-muted-foreground">
             {building.city ?? "—"} {building.district ? `- ${building.district}` : ""} · المالك: {building.owner.name}
           </p>
         </div>
         {canManage && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <CreateExpenseDialog
               buildings={[{ id: building.id, name: building.name }]}
               units={building.units.map((u) => ({ id: u.id, unitNumber: u.unitNumber, buildingId: building.id }))}

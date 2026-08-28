@@ -83,7 +83,7 @@ export default async function ExpiringContractsPage(props: PageProps<"/contracts
         </p>
       </div>
 
-      <div className="flex gap-1 overflow-x-auto rounded-lg bg-muted p-1 w-fit">
+      <div className="flex w-fit max-w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1">
         {[
           { key: "", label: "الكل" },
           { key: "30", label: "خلال شهر" },

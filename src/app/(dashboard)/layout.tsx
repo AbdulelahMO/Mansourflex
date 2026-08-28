@@ -58,7 +58,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
         defaultCollapsed={collapsed}
       />
 
-      <div className="flex min-h-screen flex-1 flex-col">
+      {/* min-w-0: a flex child refuses to shrink below its content, so one wide table would stretch every page. */}
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         <div className="print:hidden">
           <Topbar
             name={name ?? ""}

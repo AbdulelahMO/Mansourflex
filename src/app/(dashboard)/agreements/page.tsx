@@ -85,7 +85,7 @@ export default async function AgreementsPage(props: PageProps<"/agreements">) {
         </Button>
       </div>
 
-      <div className="flex gap-1 overflow-x-auto rounded-lg bg-muted p-1 w-fit">
+      <div className="flex w-fit max-w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1">
         {STATUS_TABS.map((tab) => {
           const qs = new URLSearchParams({
             ...(tab.key !== "all" ? { status: tab.key } : {}),

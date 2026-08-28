@@ -104,7 +104,7 @@ export default async function PaymentsPage(props: PageProps<"/payments">) {
         <p className="text-sm text-muted-foreground">متابعة دفعات الإيجار المستحقة والمتأخرة</p>
       </div>
 
-      <div className="flex gap-1 overflow-x-auto rounded-lg bg-muted p-1 w-fit">
+      <div className="flex w-fit max-w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1">
         {TABS.map((tab) => (
           <Link
             key={tab.key}

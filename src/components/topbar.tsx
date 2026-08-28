@@ -43,7 +43,7 @@ export function Topbar({
         </SheetContent>
       </Sheet>
 
-      <div className="flex items-center gap-2 md:hidden">
+      <div className="flex min-w-0 items-center gap-2 md:hidden">
         <BrandMark name={orgName} logoUrl={orgLogoUrl} iconClassName="size-5" textClassName="text-sm font-bold" clamp={false} />
       </div>
 
