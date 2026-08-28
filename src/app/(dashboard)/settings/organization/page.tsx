@@ -1,6 +1,7 @@
 import { requirePagePermission } from "@/lib/authz";
 import { getOrganizationSettings } from "@/lib/actions/organization";
 import { OrganizationForm } from "@/components/settings/organization-form";
+import { BackupCard } from "@/components/settings/backup-card";
 
 export default async function OrganizationSettingsPage() {
   await requirePagePermission("settings.organization");
@@ -14,6 +15,8 @@ export default async function OrganizationSettingsPage() {
       </div>
 
       <OrganizationForm settings={settings} />
+
+      <BackupCard />
     </div>
   );
 }
