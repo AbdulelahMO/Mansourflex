@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EditOwnerDialog } from "@/components/owners/owner-dialogs";
+import { OwnerAccessCard } from "@/components/owners/owner-access-card";
 import { DeleteButton } from "@/components/delete-button";
 import { deleteOwner } from "@/lib/actions/owners";
 import { formatCurrency } from "@/lib/format";
@@ -25,7 +26,7 @@ function InfoItem({ label, value }: { label: string; value: string | number | nu
 
 export default async function OwnerDetailPage(props: PageProps<"/owners/[id]">) {
   const { id } = await props.params;
-  await requirePagePermission("owners.view");
+  const viewer = await requirePagePermission("owners.view");
 
   const owner = await prisma.owner.findUnique({
     where: { id },
@@ -95,7 +96,9 @@ export default async function OwnerDetailPage(props: PageProps<"/owners/[id]">) 
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground">
-            {owner.user ? `حساب دخول مفعّل · ${owner.user.email}` : "لا يوجد حساب دخول"}
+            {owner.user
+              ? `${owner.user.isActive ? "حساب دخول مفعّل" : "حساب دخول موقوف"} · ${owner.user.email}`
+              : "لا يوجد حساب دخول"}
           </p>
         </div>
         <div className="flex items-center gap-1">
@@ -139,6 +142,24 @@ export default async function OwnerDetailPage(props: PageProps<"/owners/[id]">) 
           <InfoItem label="الرقم الضريبي" value={owner.taxNumber} />
         </CardContent>
       </Card>
+
+      {/* Sign-in accounts are the administrator's to hand out, and optional for the owner. */}
+      {viewer.role === "ADMIN" && (
+        <OwnerAccessCard
+          ownerId={owner.id}
+          ownerName={owner.name}
+          ownerEmail={owner.email}
+          login={
+            owner.user
+              ? {
+                  email: owner.user.email,
+                  isActive: owner.user.isActive,
+                  mustChangePassword: owner.user.mustChangePassword,
+                }
+              : null
+          }
+        />
+      )}
 
       {isCompany && owner.representativeName && (
         <Card className="gap-0 py-0">

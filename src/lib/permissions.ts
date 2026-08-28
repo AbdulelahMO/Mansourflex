@@ -42,6 +42,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: "owners.create", label: "إضافة مالك" },
       { key: "owners.edit", label: "تعديل مالك" },
       { key: "owners.delete", label: "حذف مالك", sensitive: true },
+      { key: "owners.access", label: "حسابات دخول الملاك", sensitive: true, adminOnly: true },
     ],
   },
   {

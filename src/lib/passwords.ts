@@ -26,6 +26,19 @@ export function generateTemporaryPassword() {
     .join("");
 }
 
+/**
+ * For an owner, who signs in once in a while and is told the password over the phone:
+ * a plain word and four digits, no symbols and no confusable characters. It is weak on
+ * purpose and short-lived by design — the owner is forced to replace it on first sign-in.
+ */
+const EASY_WORDS = ["Amal", "Bayt", "Dar", "Nakhl", "Noor", "Rawd", "Salam", "Waha", "Yasmin", "Zahra"];
+
+export function generateSimplePassword() {
+  const word = EASY_WORDS[Math.floor(Math.random() * EASY_WORDS.length)];
+  const digits = String(Math.floor(Math.random() * 9000) + 1000); // 1000–9999، بلا أصفار في المقدمة
+  return `${word}${digits}`;
+}
+
 export { PASSWORD_MIN_LENGTH } from "@/lib/passwords-shared";
 import { PASSWORD_MIN_LENGTH } from "@/lib/passwords-shared";
 

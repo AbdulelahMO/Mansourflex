@@ -1,7 +1,6 @@
 "use server";
 
 import { z } from "zod";
-import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -37,8 +36,6 @@ const ownerSchema = z.object({
   representativePhone: z.string().trim().optional().or(z.literal("")),
   representativeEmail: z.string().trim().email("بريد إلكتروني غير صحيح").optional().or(z.literal("")),
   notes: z.string().trim().optional().or(z.literal("")),
-  createLogin: z.string().optional(),
-  password: z.string().optional(),
 });
 
 async function createOwnerRecord(formData: FormData) {
@@ -47,15 +44,6 @@ async function createOwnerRecord(formData: FormData) {
     return { ok: false, state: { error: "تحقق من الحقول", fieldErrors: parsed.error.flatten().fieldErrors } } as const;
   }
   const data = parsed.data;
-
-  if (data.createLogin === "on") {
-    if (!data.email) return { ok: false, state: { error: "البريد الإلكتروني مطلوب لإنشاء حساب دخول" } } as const;
-    if (!data.password || data.password.length < 8) {
-      return { ok: false, state: { error: "كلمة المرور يجب أن تكون 8 أحرف على الأقل" } } as const;
-    }
-    const existing = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
-    if (existing) return { ok: false, state: { error: "البريد الإلكتروني مستخدم مسبقاً لحساب آخر" } } as const;
-  }
 
   const owner = await prisma.owner.create({
     data: {
@@ -71,18 +59,6 @@ async function createOwnerRecord(formData: FormData) {
       representativePhone: data.representativePhone || null,
       representativeEmail: data.representativeEmail || null,
       notes: data.notes || null,
-      ...(data.createLogin === "on" && data.email && data.password
-        ? {
-            user: {
-              create: {
-                name: data.name,
-                email: data.email.toLowerCase(),
-                passwordHash: await bcrypt.hash(data.password, 10),
-                role: "OWNER",
-              },
-            },
-          }
-        : {}),
     },
   });
 

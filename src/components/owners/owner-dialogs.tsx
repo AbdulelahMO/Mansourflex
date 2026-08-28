@@ -3,10 +3,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FormDialog } from "@/components/form-dialog";
 import { createOwner, updateOwner } from "@/lib/actions/owners";
@@ -105,7 +103,6 @@ function RepresentativeFields({ owner }: { owner?: Owner }) {
 }
 
 export function CreateOwnerDialog() {
-  const [createLogin, setCreateLogin] = useState(false);
   const [ownerType, setOwnerType] = useState("");
   const isCompany = ownerType === "COMPANY";
 
@@ -175,19 +172,6 @@ export function CreateOwnerDialog() {
         <Label htmlFor="notes">ملاحظات</Label>
         <Textarea id="notes" name="notes" />
       </div>
-      <div className="flex items-center justify-between rounded-lg border p-3">
-        <div>
-          <p className="text-sm font-medium">إنشاء حساب دخول للمالك</p>
-          <p className="text-xs text-muted-foreground">يتيح للمالك تسجيل الدخول لعرض أملاكه فقط</p>
-        </div>
-        <Switch name="createLogin" checked={createLogin} onCheckedChange={setCreateLogin} />
-      </div>
-      {createLogin && (
-        <div className="space-y-1.5">
-          <Label htmlFor="password">كلمة المرور</Label>
-          <PasswordInput id="password" name="password" minLength={8} required={createLogin} />
-        </div>
-      )}
     </FormDialog>
   );
 }
