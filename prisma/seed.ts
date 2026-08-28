@@ -1,9 +1,17 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { applySystemRoles } from "../src/lib/system-roles";
 
 const prisma = new PrismaClient();
 
 async function main() {
+  // The roles come first: an employee account is worth nothing without one to hold.
+  for (const r of await applySystemRoles(prisma as never)) {
+    if (r.created) console.log(`أُنشئ الدور: ${r.role} (${r.added.length} صلاحية)`);
+    else if (r.added.length) console.log(`استُكمل الدور ${r.role}: ${r.added.join("، ")}`);
+    else console.log(`الدور ${r.role}: لا جديد`);
+  }
+
   const adminEmail = process.env.ADMIN_EMAIL ?? "admin@example.com";
   const adminPassword = process.env.ADMIN_PASSWORD ?? "Admin@12345";
 
