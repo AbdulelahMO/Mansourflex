@@ -5,6 +5,7 @@ import { buildSettlement } from "@/lib/settlement";
 import { buildingClosure, closureSummary, duesSummary } from "@/lib/core/building-closure";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { round2 } from "@/lib/documents-core";
+import { buildPaymentSchedule } from "@/lib/payment-schedule";
 import type { ActionState } from "@/lib/types";
 
 /**
@@ -290,6 +291,96 @@ export const SENSITIVE_OPS: Record<string, SensitiveOp<never>> = {
       return {
         success: true,
         message: `تم التراجع عن تحصيل ${formatCurrency(receipt.amount)} وألغي سنده ${receipt.documentNumber}`,
+      };
+    },
+  },
+
+  /**
+   * Changing the terms a schedule was built from, once something has been collected or issued
+   * against it. The instalments that carry either are never rebuilt — deleting one would take an
+   * issued document with it, or erase money that has no other record — so they stand as billed
+   * and the new terms apply to what follows them.
+   *
+   * Re-derived at execution time, not at request time: an approval may land days later, by which
+   * point more may have been collected.
+   */
+  "contracts.terms": {
+    permission: "contracts.terms",
+    describe: async ({ id, rentAmount }: { id: string; rentAmount: number }) => {
+      const contract = await prisma.contract.findUnique({
+        where: { id },
+        select: { contractNumber: true, rentAmount: true },
+      });
+      return contract
+        ? `تعديل شروط العقد ${contract.contractNumber} — الإيجار من ${formatCurrency(contract.rentAmount)} إلى ${formatCurrency(rentAmount)} وإعادة توليد أقساطه غير المحصّلة`
+        : `تعديل شروط العقد ${id}`;
+    },
+    run: async (payload: {
+      id: string;
+      startDate: string;
+      endDate: string;
+      rentAmount: number;
+      amountType: "TOTAL" | "ANNUAL" | "INCREASING";
+      increasePercent: number;
+      vatRate: number;
+      paymentFrequency: "MONTHLY" | "QUARTERLY" | "SEMI_ANNUAL" | "ANNUAL" | "ONE_TIME";
+      details: { ejarContractNumber: string | null; depositAmount: number | null; notes: string | null };
+    }) => {
+      const contract = await prisma.contract.findUnique({
+        where: { id: payload.id },
+        include: { payments: { include: { documents: { select: { id: true } } } } },
+      });
+      if (!contract) return missing("العقد");
+
+      const startDate = new Date(payload.startDate);
+      const endDate = new Date(payload.endDate);
+      if (endDate <= startDate) return { error: "تاريخ النهاية يجب أن يكون بعد تاريخ البداية" };
+
+      const schedule = buildPaymentSchedule(
+        startDate,
+        endDate,
+        payload.rentAmount,
+        payload.paymentFrequency,
+        payload.amountType,
+        payload.increasePercent,
+        payload.vatRate
+      );
+      if (schedule.length === 0) return { error: "تعذر توليد جدول الدفعات — راجع التواريخ" };
+
+      const kept = contract.payments.filter((p) => p.documents.length > 0 || (p.paidAmount ?? 0) > 0);
+      const replaceable = contract.payments.filter((p) => p.documents.length === 0 && !(p.paidAmount ?? 0));
+      const keptUntil = kept.reduce<Date | null>(
+        (latest, p) => (!latest || p.dueDate > latest ? p.dueDate : latest),
+        null
+      );
+      const fresh = keptUntil ? schedule.filter((p) => p.dueDate > keptUntil) : schedule;
+
+      await prisma.$transaction([
+        prisma.payment.deleteMany({ where: { id: { in: replaceable.map((p) => p.id) } } }),
+        prisma.contract.update({
+          where: { id: payload.id },
+          data: {
+            ...payload.details,
+            startDate,
+            endDate,
+            rentAmount: payload.rentAmount,
+            amountType: payload.amountType,
+            increasePercent: payload.amountType === "INCREASING" ? payload.increasePercent : null,
+            vatRate: payload.vatRate,
+            paymentFrequency: payload.paymentFrequency,
+            payments: { create: fresh.map((p) => ({ dueDate: p.dueDate, amount: p.amount })) },
+          },
+        }),
+      ]);
+
+      revalidatePath(`/contracts/${payload.id}`);
+      revalidatePath("/contracts");
+      revalidatePath("/payments");
+      return {
+        success: true,
+        message: kept.length
+          ? `تم الحفظ — أُبقيت ${kept.length} قسطاً عليها تحصيل أو مستندات، وأُعيد توليد ${fresh.length} قسطاً بالشروط الجديدة`
+          : `تم الحفظ وأُعيد توليد ${fresh.length} قسطاً`,
       };
     },
   },

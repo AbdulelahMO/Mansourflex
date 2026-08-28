@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { requirePagePermission } from "@/lib/authz";
+import { requirePagePermission, statesFor } from "@/lib/authz";
 import { ContractEditForm } from "@/components/contracts/contract-edit-form";
 import { updateContract } from "@/lib/actions/contracts";
 
@@ -12,7 +12,7 @@ function toInput(date: Date) {
 }
 
 export default async function EditContractPage(props: PageProps<"/contracts/[id]/edit">) {
-  const user = await requirePagePermission("contracts.edit");
+  await requirePagePermission("contracts.edit");
   const { id } = await props.params;
 
   const contract = await prisma.contract.findUnique({
@@ -30,6 +30,8 @@ export default async function EditContractPage(props: PageProps<"/contracts/[id]
   const documentedCount = contract.payments.filter(
     (p) => p.documents.length > 0 || (p.paidAmount ?? 0) > 0
   ).length;
+
+  const { "contracts.terms": termsState } = await statesFor(["contracts.terms"]);
 
   return (
     <div className="space-y-4">
@@ -68,7 +70,7 @@ export default async function EditContractPage(props: PageProps<"/contracts/[id]
         }}
         action={updateContract.bind(null, contract.id)}
         documentedCount={documentedCount}
-        locked={documentedCount > 0 && user.role !== "ADMIN"}
+        termsState={termsState}
       />
     </div>
   );

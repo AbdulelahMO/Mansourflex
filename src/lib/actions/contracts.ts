@@ -177,17 +177,33 @@ export async function updateContract(id: string, _prev: ActionState, formData: F
   // collection that no longer has any other record.
   const documented = contract.payments.filter((p) => p.documents.length > 0 || (p.paidAmount ?? 0) > 0);
 
-  if (termsChanged && documented.length > 0 && user.role !== "ADMIN") {
-    return {
-      error: `لا يمكن تعديل شروط العقد بعد تحصيل أو إصدار مستندات على ${documented.length} من أقساطه — راجع مدير النظام.`,
-    };
-  }
-
   const detailsData = {
     ejarContractNumber: details.data.ejarContractNumber || null,
     depositAmount: details.data.depositAmount ? Number(details.data.depositAmount) : null,
     notes: details.data.notes || null,
   };
+
+  // Rebuilding a schedule that already carries collections or documents is not an edit but a
+  // decision: it goes through the guard, so a deputy files a request and the administrator
+  // performs it at once. The details are saved either way — they cost nothing.
+  if (termsChanged && documented.length > 0) {
+    await prisma.contract.update({ where: { id }, data: detailsData });
+    return runSensitive(
+      "contracts.terms",
+      {
+        id,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        rentAmount,
+        amountType: t.amountType,
+        increasePercent,
+        vatRate,
+        paymentFrequency: t.paymentFrequency,
+        details: detailsData,
+      },
+      String(formData.get("reason") ?? "")
+    );
+  }
 
   if (!termsChanged) {
     await prisma.contract.update({ where: { id }, data: detailsData });

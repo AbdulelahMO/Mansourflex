@@ -75,6 +75,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: "contracts.create", label: "إنشاء عقد" },
       { key: "contracts.renew", label: "تجديد عقد" },
       { key: "contracts.edit", label: "تعديل عقد وحالته" },
+      { key: "contracts.terms", label: "تعديل شروط العقد بعد التحصيل", sensitive: true },
       { key: "contracts.delete", label: "حذف عقد", sensitive: true },
     ],
   },

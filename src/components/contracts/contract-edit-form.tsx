@@ -50,17 +50,20 @@ export function ContractEditForm({
   contract,
   action,
   documentedCount,
-  locked,
+  termsState,
 }: {
   contract: ContractForEdit;
   action: (prev: ActionState, formData: FormData) => Promise<ActionState>;
   /** Instalments carrying a collection or a document — these are never rebuilt. */
   documentedCount: number;
-  /** Terms are read-only: documents exist and the signed-in user is not the administrator. */
-  locked: boolean;
+  /** How this user holds the right to rebuild a schedule that already carries collections. */
+  termsState: "ALLOW" | "APPROVE" | "DENY";
 }) {
   const [amountType, setAmountType] = useState(contract.amountType);
   const [state, formAction] = useActionState(action, initialActionState);
+
+  const locked = documentedCount > 0 && termsState === "DENY";
+  const needsApproval = documentedCount > 0 && termsState === "APPROVE";
 
   return (
     <form action={formAction} className="space-y-4">
@@ -117,6 +120,7 @@ export function ContractEditForm({
                   تعديل أي من هذه الشروط يعيد بناء جدول الأقساط. الأقساط التي جرى عليها تحصيل أو صدرت لها
                   مستندات ({documentedCount}) تبقى كما هي بمبالغها وفواتيرها وسنداتها، وتسري الشروط الجديدة على
                   ما بعدها.
+                  {needsApproval && " ويحتاج ذلك موافقة مدير النظام، فاكتب سبب الطلب أدناه."}
                 </span>
               </p>
             )
@@ -203,6 +207,13 @@ export function ContractEditForm({
         </CardContent>
       </Card>
 
+      {(needsApproval || state?.needsReason) && (
+        <div className="space-y-1.5">
+          <Label htmlFor="reason">سبب طلب تعديل الشروط</Label>
+          <Textarea id="reason" name="reason" placeholder="يُعرض على مدير النظام مع الطلب" />
+        </div>
+      )}
+
       {state?.error && (
         <p className="text-sm text-destructive" aria-live="polite">
           {state.error}
@@ -213,7 +224,7 @@ export function ContractEditForm({
         <Button variant="outline" asChild>
           <Link href={`/contracts`}>إلغاء</Link>
         </Button>
-        <SubmitButton>حفظ التعديلات</SubmitButton>
+        <SubmitButton>{needsApproval ? "حفظ وإرسال الطلب" : "حفظ التعديلات"}</SubmitButton>
       </div>
     </form>
   );
