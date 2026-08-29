@@ -96,14 +96,29 @@ export default async function DashboardPage(props: PageProps<"/">) {
       },
       select: { amount: true, paidAmount: true },
     }),
+    // Arrears, not merely an unpaid schedule: a contract signed today has a year of instalments
+    // ahead of it and owes nothing yet. The condition matches the figure the card shows —
+    // instalments already due and short — so no contract appears in the list at zero.
     prisma.contract.count({
-      where: { unit: { building: activeScope }, payments: { some: { status: { in: [...unpaidStatuses] } } } },
+      where: {
+        unit: { building: activeScope },
+        payments: { some: { status: { in: [...unpaidStatuses] }, dueDate: { lte: endOfToday } } },
+      },
     }),
     prisma.contract.findMany({
-      where: { unit: { building: activeScope }, payments: { some: { status: { in: [...unpaidStatuses] } } } },
-      include: { tenant: true, unit: { include: { building: true } }, payments: true },
-      orderBy: { createdAt: "desc" },
-      take: 8,
+      where: {
+        unit: { building: activeScope },
+        payments: { some: { status: { in: [...unpaidStatuses] }, dueDate: { lte: endOfToday } } },
+      },
+      include: {
+        tenant: true,
+        unit: { include: { building: true } },
+        // Only the instalments the arrears are computed from travel back.
+        payments: {
+          where: { status: { in: [...unpaidStatuses] }, dueDate: { lte: endOfToday } },
+          select: { amount: true, paidAmount: true },
+        },
+      },
     }),
     prisma.building.findMany({
       where: activeScope,
@@ -168,16 +183,18 @@ export default async function DashboardPage(props: PageProps<"/">) {
   const collectionRate =
     totalCollected + totalOutstanding > 0 ? Math.round((totalCollected / (totalCollected + totalOutstanding)) * 100) : 0;
 
-  const outstandingContracts: OutstandingContract[] = outstandingContractsRaw.map((c) => ({
-    id: c.id,
-    contractNumber: c.contractNumber,
-    unitLabel: `${c.unit.building.name} - ${c.unit.unitNumber}`,
-    tenantName: c.tenant.name,
-    // Instalments not yet due are not arrears, so they stay out of this figure.
-    outstandingAmount: c.payments
-      .filter((p) => p.status !== "PAID" && p.dueDate <= endOfToday)
-      .reduce((sum, p) => sum + Math.max(0, p.amount - (p.paidAmount ?? 0)), 0),
-  }));
+  // The heaviest arrears first: the card shows eight, and the eight worth chasing are the
+  // largest — not the eight most recently signed.
+  const outstandingContracts: OutstandingContract[] = outstandingContractsRaw
+    .map((c) => ({
+      id: c.id,
+      contractNumber: c.contractNumber,
+      unitLabel: `${c.unit.building.name} - ${c.unit.unitNumber}`,
+      tenantName: c.tenant.name,
+      outstandingAmount: c.payments.reduce((sum, p) => sum + Math.max(0, p.amount - (p.paidAmount ?? 0)), 0),
+    }))
+    .sort((a, b) => b.outstandingAmount - a.outstandingAmount)
+    .slice(0, 8);
 
   const propertyInsights: InsightItem[] = buildingsWithPayments
     .map((b) => {
