@@ -60,7 +60,20 @@ export type BuildingFormValues = {
 
 const SECTOR_OPTIONS = ["تجاري", "سكني", "تجاري - سكني", "صناعي", "زراعي"];
 const PROPERTY_TYPE_OPTIONS = ["برج", "عمارة سكنية", "فيلا", "مجمع سكني", "مجمع تجاري", "أخرى"];
-const DEED_TYPE_OPTIONS = ["صك إلكتروني", "صك ورقي", "عقد ابتدائي", "أخرى"];
+/**
+ * The four ownership documents Ejar accepts, named as Ejar names them so a property is
+ * classified once and typed into the platform without translation. «أخرى» is ours: Ejar is a
+ * registry that admits none but an approved document, while a manager may take on a property
+ * whose papers are still incomplete — and forcing a wrong choice to finish the form is worse
+ * than an honest one.
+ */
+const DEED_TYPE_OPTIONS = [
+  "صك ملكية إلكتروني",
+  "صك السجل العقاري",
+  "حجة استحكام",
+  "صك ملكية ورقي",
+  "أخرى",
+];
 const REGIONS = [
   "الرياض",
   "مكة المكرمة",
