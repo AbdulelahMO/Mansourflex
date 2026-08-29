@@ -278,9 +278,13 @@ export async function updateContractStatus(id: string, status: "ACTIVE" | "EXPIR
 
   await prisma.contract.update({ where: { id }, data: { status } });
 
-  if (status !== "ACTIVE") {
-    await prisma.unit.update({ where: { id: contract.unitId }, data: { status: "VACANT" } });
-  }
+  // The unit follows its contract in both directions. Only the release was written, so a
+  // contract fsakh'd then reactivated left its unit standing empty in the records: understated
+  // occupancy, and a rented unit offered again to the next tenant as though it were free.
+  await prisma.unit.update({
+    where: { id: contract.unitId },
+    data: { status: status === "ACTIVE" ? "OCCUPIED" : "VACANT" },
+  });
 
   revalidatePath("/contracts");
   revalidatePath("/units");

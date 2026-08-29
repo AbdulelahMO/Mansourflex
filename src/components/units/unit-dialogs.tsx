@@ -88,16 +88,28 @@ function UnitFields({
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="status">الحالة</Label>
-          <Select name="status" defaultValue={unit?.status ?? "VACANT"} required>
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="VACANT">شاغرة</SelectItem>
-              <SelectItem value="OCCUPIED">مؤجرة</SelectItem>
-              <SelectItem value="MAINTENANCE">تحت الصيانة</SelectItem>
-            </SelectContent>
-          </Select>
+          {unit?.status === "OCCUPIED" ? (
+            // Occupancy is the contract's to say, not a field to type: it is set when a contract
+            // is written and released when it ends. Offering it here let a unit be marked rented
+            // with no tenant behind it — counted as occupied, and hidden from the next contract.
+            <>
+              <div className="flex h-11 items-center rounded-lg border border-input bg-muted/40 px-3 text-sm text-muted-foreground md:h-8">
+                مؤجرة — بعقد ساري
+              </div>
+              <input type="hidden" name="status" value="OCCUPIED" />
+              <p className="text-xs text-muted-foreground">تتبع الحالة عقدها، فتعود شاغرة عند انتهائه أو فسخه.</p>
+            </>
+          ) : (
+            <Select name="status" defaultValue={unit?.status ?? "VACANT"} required>
+              <SelectTrigger className="w-full" id="status">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="VACANT">شاغرة</SelectItem>
+                <SelectItem value="MAINTENANCE">تحت الصيانة</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
         </div>
       </div>
       <div className="grid grid-cols-3 gap-3">
