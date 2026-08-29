@@ -27,8 +27,14 @@ export function OutstandingContractsList({ items, total }: { items: OutstandingC
             <p className="text-sm">لا توجد عقود بمستحقات غير مصفاة</p>
           </div>
         ) : (
+          // A contract the operator needs to chase is worth opening from here, and the whole row
+          // is the target — easier to hit than the number alone, and on a phone the only one.
           items.map((c) => (
-            <div key={c.id} className="flex items-center justify-between border-b px-4 py-3 last:border-0">
+            <Link
+              key={c.id}
+              href={`/contracts/${c.id}`}
+              className="flex items-center justify-between border-b px-4 py-3 transition-colors last:border-0 hover:bg-muted/50"
+            >
               <div className="min-w-0">
                 <p className="text-sm font-semibold">عقد رقم {c.contractNumber}</p>
                 <p className="mt-0.5 truncate text-xs text-muted-foreground">
@@ -36,7 +42,7 @@ export function OutstandingContractsList({ items, total }: { items: OutstandingC
                 </p>
               </div>
               <span className="shrink-0 text-sm font-semibold text-red-600">{formatCurrency(c.outstandingAmount)}</span>
-            </div>
+            </Link>
           ))
         )}
       </CardContent>
