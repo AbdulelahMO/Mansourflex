@@ -507,35 +507,6 @@ export function BuildingFields({ owners, building }: { owners: Owner[]; building
           </div>
 
           <div className="space-y-3 border-t pt-4">
-            <p className="text-sm font-semibold">صك الملكية</p>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <LabeledSelect label="نوع الصك" name="deedType" options={DEED_TYPE_OPTIONS} defaultValue={building?.deedType} />
-              <div className="space-y-1.5">
-                <Label htmlFor="deedNumber">رقم الصك</Label>
-                <Input id="deedNumber" name="deedNumber" dir="ltr" defaultValue={building?.deedNumber ?? ""} />
-              </div>
-              <DeedIssueDateField defaultValue={building?.deedIssueDate} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="deedFile" className="flex items-center gap-1.5">
-                <Paperclip className="size-3.5" />
-                ملف صك الملكية (PDF أو صورة)
-              </Label>
-              <Input id="deedFile" name="deedFile" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" />
-              {building?.deedFileUrl && (
-                <a
-                  href={`/api/files/${building.deedFileUrl}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-block text-xs text-primary hover:underline"
-                >
-                  عرض الملف الحالي
-                </a>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-3 border-t pt-4">
             <p className="text-sm font-semibold">تفاصيل إنشائية</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="space-y-1.5">
