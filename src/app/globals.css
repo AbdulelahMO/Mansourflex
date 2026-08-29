@@ -263,3 +263,16 @@
     padding: 0.5rem 0;
   }
 }
+
+/*
+ * Leaflet ranks its own layers up to z-index 1000 — controls, popups, markers. The map
+ * container itself is positioned but has no z-index of its own, so it never becomes a stacking
+ * context and those numbers are weighed against the whole page instead of staying inside the
+ * map: the map floated over dialogs, dropdowns and anything else ranked lower than 1000.
+ * A z-index on the container closes that: the layers are ranked within the map, and the map
+ * takes its place in the page like any other element.
+ */
+.leaflet-container {
+  position: relative;
+  z-index: 0;
+}
