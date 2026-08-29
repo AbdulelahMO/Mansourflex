@@ -9,6 +9,14 @@ import { FormDialog } from "@/components/form-dialog";
 import { createUnit, updateUnit } from "@/lib/actions/units";
 import { Plus, Pencil } from "lucide-react";
 
+/**
+ * What the unit is. It was a free text box, so it filled up with the building's sector —
+ * «سكني» and «تجاري» — which describes use, not the unit, and left the occupancy-by-type
+ * figures counting a spelling as a type. A stored value outside this list is kept as an option
+ * of its own, so opening an old unit never silently drops what it already says.
+ */
+const UNIT_TYPE_OPTIONS = ["شقة", "محل", "مكتب", "دور", "استوديو", "مستودع", "معرض", "غرفة", "أخرى"];
+
 type Unit = {
   id: string;
   buildingId: string;
@@ -62,7 +70,21 @@ function UnitFields({
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label htmlFor="unitType">نوع الوحدة</Label>
-          <Input id="unitType" name="unitType" placeholder="سكني / تجاري" defaultValue={unit?.unitType ?? ""} />
+          <Select name="unitType" defaultValue={unit?.unitType ?? undefined}>
+            <SelectTrigger className="w-full" id="unitType">
+              <SelectValue placeholder="اختر نوع الوحدة" />
+            </SelectTrigger>
+            <SelectContent>
+              {[
+                ...UNIT_TYPE_OPTIONS,
+                ...(unit?.unitType && !UNIT_TYPE_OPTIONS.includes(unit.unitType) ? [unit.unitType] : []),
+              ].map((t) => (
+                <SelectItem key={t} value={t}>
+                  {t}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="status">الحالة</Label>

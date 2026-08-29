@@ -59,7 +59,25 @@ export type BuildingFormValues = {
 };
 
 const SECTOR_OPTIONS = ["تجاري", "سكني", "تجاري - سكني", "صناعي", "زراعي"];
-const PROPERTY_TYPE_OPTIONS = ["برج", "عمارة سكنية", "فيلا", "مجمع سكني", "مجمع تجاري", "أخرى"];
+/**
+ * What the property is, not what it is used for — the sector field already carries that, and
+ * a type like «عمارة سكنية» made the operator answer the same question twice.
+ */
+const PROPERTY_TYPE_OPTIONS = [
+  "برج",
+  "عمارة",
+  "فيلا",
+  "دوبلكس",
+  "مجمع",
+  "مركز تجاري",
+  "معرض",
+  "مستودع",
+  "استراحة",
+  "شاليه",
+  "محطة",
+  "أرض",
+  "أخرى",
+];
 /**
  * The four ownership documents Ejar accepts, named as Ejar names them so a property is
  * classified once and typed into the platform without translation. «أخرى» is ours: Ejar is a
