@@ -50,9 +50,19 @@ export default async function ContractsPage(props: PageProps<"/contracts">) {
   // renewal is arranged — and a unit released on a date alone gets offered out from under them.
   const today = new Date();
 
+  // «قارب على الانتهاء» is a date, not a state a contract is put into: nothing ever wrote that
+  // status, so the tab filtered on a value no contract has ever held and came back empty however
+  // near the contracts were to their end. It asks the question the same way the expiring page does.
+  const soonEnd = new Date(today.getTime() + 90 * 86_400_000);
+  const expiringSoon = { status: "ACTIVE" as const, endDate: { gte: today, lte: soonEnd } };
+
   const where = {
     unit: { building: scope },
-    ...(activeStatus !== "all" ? { status: activeStatus as (typeof CONTRACT_STATUSES)[number] } : {}),
+    ...(activeStatus === "EXPIRING_SOON"
+      ? expiringSoon
+      : activeStatus !== "all"
+        ? { status: activeStatus as (typeof CONTRACT_STATUSES)[number] }
+        : {}),
     ...(q
       ? {
           OR: [
@@ -171,6 +181,11 @@ export default async function ContractsPage(props: PageProps<"/contracts">) {
                             {c.status === "ACTIVE" && c.endDate < today && (
                               <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
                                 انتهت مدته ولم يُنهَ
+                              </span>
+                            )}
+                            {c.status === "ACTIVE" && c.endDate >= today && c.endDate <= soonEnd && (
+                              <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-800">
+                                قارب على الانتهاء
                               </span>
                             )}
                           </div>
