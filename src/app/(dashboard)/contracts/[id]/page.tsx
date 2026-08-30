@@ -17,6 +17,8 @@ import { IssueDocumentButtons } from "@/components/contracts/document-actions";
 import { DeleteButton } from "@/components/delete-button";
 import { cancelFinancialDocument } from "@/lib/actions/documents";
 import { reverseCollection } from "@/lib/actions/payments";
+import { contractArrears } from "@/lib/actions/contracts";
+import { VacateUnitButton } from "@/components/contracts/vacate-unit-button";
 import { CancelDocumentButton } from "@/components/documents/cancel-document-button";
 
 const AMOUNT_TYPE_LABELS: Record<string, string> = {
@@ -79,6 +81,9 @@ export default async function ContractDetailPage(props: PageProps<"/contracts/[i
   });
   if (!contract) notFound();
 
+  // What still holds the unit after the lease is over.
+  const arrears = contract.status === "ACTIVE" ? 0 : await contractArrears(contract.id);
+
   // A payment may carry many receipts but only one invoice.
   const invoiceByPaymentId = new Map(
     contract.documents
@@ -139,6 +144,35 @@ export default async function ContractDetailPage(props: PageProps<"/contracts/[i
           {canManage && <ContractActionsMenu id={contract.id} status={contract.status} />}
         </div>
       </div>
+
+      {/* The lease is over but the unit is still held: someone has to say what happens to it. */}
+      {contract.status !== "ACTIVE" && contract.unit.status !== "VACANT" && !contract.renewedTo && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div>
+            <p className="font-medium">انتهى العقد والوحدة ما زالت محجوزة</p>
+            <p className="mt-0.5 text-xs">
+              {arrears > 0
+                ? `على العقد مستحقات ${formatCurrency(arrears)} — تبقى الوحدة مؤجرة حتى تُسوّى، فلا تُعرض لمستأجر جديد ودين سابقها قائم.`
+                : "المستحقات مسددة — جدّد العقد إن بقي المستأجر، أو أخلِ الوحدة إن خرج."}
+            </p>
+          </div>
+          {canManage && (
+            <div className="flex flex-wrap items-center gap-2">
+              <RenewContractDialog
+                contract={{
+                  id: contract.id,
+                  contractNumber: contract.contractNumber,
+                  endDate: contract.endDate,
+                  rentAmount: contract.rentAmount,
+                  // The banner only shows while nothing has renewed this contract.
+                  renewedToNumber: null,
+                }}
+              />
+              <VacateUnitButton contractId={contract.id} arrears={arrears} />
+            </div>
+          )}
+        </div>
+      )}
 
       {(contract.renewedFrom || contract.renewedTo) && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border bg-muted/30 px-4 py-2.5 text-sm">

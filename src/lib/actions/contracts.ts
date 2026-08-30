@@ -6,6 +6,8 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requirePermission, recordAudit } from "@/lib/authz";
 import { buildPaymentSchedule } from "@/lib/payment-schedule";
+import { round2 } from "@/lib/documents-core";
+import { formatCurrency } from "@/lib/format";
 import { runSensitive } from "@/lib/approvals";
 import type { ActionState } from "@/lib/types";
 
@@ -270,25 +272,94 @@ export async function updateContract(id: string, _prev: ActionState, formData: F
   };
 }
 
+/** What has fallen due on a contract and is still short — the sum that keeps a unit held. */
+export async function contractArrears(contractId: string) {
+  const now = new Date();
+  const due = await prisma.payment.findMany({
+    where: { contractId, status: { not: "PAID" }, dueDate: { lte: now } },
+    select: { amount: true, paidAmount: true },
+  });
+  return round2(due.reduce((sum, p) => sum + Math.max(0, p.amount - (p.paidAmount ?? 0)), 0));
+}
+
+/**
+ * Ending a contract does not free the unit. A tenant may have left owing rent, or may still be
+ * in place while a renewal is arranged — and a unit released on the strength of a date alone is
+ * offered to the next tenant while the last one is still in it, or while their debt is unsettled.
+ * So the unit stays held, and releasing it is its own decision: `vacateUnit`.
+ *
+ * Reactivating a contract does take the unit back, since a live contract is the very thing that
+ * holds it.
+ */
 export async function updateContractStatus(id: string, status: "ACTIVE" | "EXPIRED" | "TERMINATED"): Promise<ActionState> {
-  await requirePermission("contracts.edit");
+  const { user } = await requirePermission("contracts.edit");
 
   const contract = await prisma.contract.findUnique({ where: { id } });
   if (!contract) return { error: "العقد غير موجود" };
 
   await prisma.contract.update({ where: { id }, data: { status } });
 
-  // The unit follows its contract in both directions. Only the release was written, so a
-  // contract fsakh'd then reactivated left its unit standing empty in the records: understated
-  // occupancy, and a rented unit offered again to the next tenant as though it were free.
-  await prisma.unit.update({
-    where: { id: contract.unitId },
-    data: { status: status === "ACTIVE" ? "OCCUPIED" : "VACANT" },
+  if (status === "ACTIVE") {
+    await prisma.unit.update({ where: { id: contract.unitId }, data: { status: "OCCUPIED" } });
+  }
+
+  await recordAudit({
+    user,
+    action: "contracts.edit",
+    summary: `${status === "ACTIVE" ? "تفعيل" : status === "EXPIRED" ? "إنهاء" : "فسخ"} العقد ${contract.contractNumber}`,
+    targetId: id,
   });
 
   revalidatePath("/contracts");
+  revalidatePath(`/contracts/${id}`);
   revalidatePath("/units");
-  return { success: true };
+
+  if (status === "ACTIVE") return { success: true, message: "تم تفعيل العقد" };
+
+  const arrears = await contractArrears(id);
+  return {
+    success: true,
+    message: arrears > 0
+      ? `تم إنهاء العقد. الوحدة تبقى مؤجرة حتى تُسدَّد المستحقات (${formatCurrency(arrears)}) — ثم أخلِها أو جدّد العقد.`
+      : "تم إنهاء العقد. الوحدة تبقى مؤجرة حتى تتخذ إجراءً: تجديد العقد، أو إخلاء الوحدة إن خرج المستأجر.",
+  };
+}
+
+/**
+ * Releases the unit once its lease is over: the tenant is out and owes nothing. Held back while
+ * anything is due, so a unit is never offered again with the last tenant's debt still open.
+ */
+export async function vacateUnit(contractId: string): Promise<ActionState> {
+  const { user } = await requirePermission("units.edit");
+
+  const contract = await prisma.contract.findUnique({
+    where: { id: contractId },
+    include: { unit: { select: { id: true, unitNumber: true, status: true } } },
+  });
+  if (!contract) return { error: "العقد غير موجود" };
+  if (contract.status === "ACTIVE") return { error: "لا تُخلى وحدة وعقدها ساري — أنهِ العقد أولاً" };
+  if (contract.unit.status === "VACANT") return { error: "الوحدة شاغرة أصلاً" };
+
+  const arrears = await contractArrears(contractId);
+  if (arrears > 0) {
+    return {
+      error: `على العقد مستحقات ${formatCurrency(arrears)} — لا تُخلى الوحدة قبل تسويتها، فتبقى المطالبة مرتبطة بها.`,
+    };
+  }
+
+  await prisma.unit.update({ where: { id: contract.unit.id }, data: { status: "VACANT" } });
+
+  await recordAudit({
+    user,
+    action: "units.edit",
+    summary: `إخلاء الوحدة ${contract.unit.unitNumber} بعد انتهاء العقد ${contract.contractNumber}`,
+    targetId: contract.unit.id,
+  });
+
+  revalidatePath("/contracts");
+  revalidatePath(`/contracts/${contractId}`);
+  revalidatePath("/units");
+  return { success: true, message: "أصبحت الوحدة شاغرة ومتاحة للتأجير" };
 }
 
 export async function deleteContract(id: string, reason?: string): Promise<ActionState> {
