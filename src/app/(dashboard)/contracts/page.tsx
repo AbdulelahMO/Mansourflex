@@ -88,7 +88,12 @@ export default async function ContractsPage(props: PageProps<"/contracts">) {
 
   const contracts = await prisma.contract.findMany({
     where,
-    include: { unit: { include: { building: true } }, tenant: true },
+    include: {
+      unit: { include: { building: true } },
+      tenant: true,
+      // What became of an ended contract: renewed and done with, or still holding its unit.
+      renewedTo: { select: { contractNumber: true } },
+    },
     orderBy: { createdAt: "desc" },
     skip,
     take,
@@ -190,6 +195,19 @@ export default async function ContractsPage(props: PageProps<"/contracts">) {
                             {c.status === "ACTIVE" && c.endDate < today && (
                               <span className="rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-medium text-white">
                                 انتهت مدته ولم يُنهَ
+                              </span>
+                            )}
+                            {/* An ended contract is not one thing: it may have been renewed and
+                                closed, its unit released — or it may still be waiting on someone
+                                to renew or release it. The tab alone could not tell them apart. */}
+                            {c.status !== "ACTIVE" && c.renewedTo && (
+                              <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800">
+                                مُجدَّد إلى {c.renewedTo.contractNumber}
+                              </span>
+                            )}
+                            {c.status !== "ACTIVE" && !c.renewedTo && c.unit.status !== "VACANT" && (
+                              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                                بانتظار إجراء
                               </span>
                             )}
                             {c.status === "ACTIVE" && c.endDate >= today && c.endDate <= soonEnd && (
