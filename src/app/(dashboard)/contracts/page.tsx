@@ -45,6 +45,11 @@ export default async function ContractsPage(props: PageProps<"/contracts">) {
   const filterParams: Record<string, string> = activeStatus !== "all" ? { status: activeStatus } : {};
   const extraParams: Record<string, string> = { ...filterParams, ...(q ? { q } : {}) };
 
+  // A contract does not end itself: its term runs out and it stays live until someone renews or
+  // ends it. Flagged rather than closed automatically, since a tenant often stays on while the
+  // renewal is arranged — and a unit released on a date alone gets offered out from under them.
+  const today = new Date();
+
   const where = {
     unit: { building: scope },
     ...(activeStatus !== "all" ? { status: activeStatus as (typeof CONTRACT_STATUSES)[number] } : {}),
@@ -161,7 +166,14 @@ export default async function ContractsPage(props: PageProps<"/contracts">) {
                         <TableCell>{formatDate(c.startDate)}</TableCell>
                         <TableCell>{formatDate(c.endDate)}</TableCell>
                         <TableCell>
-                          <StatusBadge status={c.status} />
+                          <div className="flex flex-col items-start gap-1">
+                            <StatusBadge status={c.status} />
+                            {c.status === "ACTIVE" && c.endDate < today && (
+                              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                                انتهت مدته ولم يُنهَ
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
                         {canManage && (
                           <TableCell>
