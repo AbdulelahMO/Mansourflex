@@ -6,7 +6,8 @@ import { ChevronLeft } from "lucide-react";
 export type StatRowItem = {
   value: string | number;
   label: string;
-  tone?: "default" | "danger" | "success";
+  /** A ramp, not a flag: the nearer the deadline the hotter the figure reads. */
+  tone?: "default" | "danger" | "warning" | "caution" | "success";
   iconSrc?: string;
   href?: string;
   /** Replaces the label line with a control — keeps the cell's height unchanged. */
@@ -69,9 +70,13 @@ export function RichStatCard({
                         "text-sm font-bold " +
                         (item.tone === "danger"
                           ? "text-red-600"
-                          : item.tone === "success"
-                            ? "text-emerald-600"
-                            : "text-foreground")
+                          : item.tone === "warning"
+                            ? "text-orange-600"
+                            : item.tone === "caution"
+                              ? "text-amber-600"
+                              : item.tone === "success"
+                                ? "text-emerald-600"
+                                : "text-foreground")
                       }
                     >
                       {item.value}

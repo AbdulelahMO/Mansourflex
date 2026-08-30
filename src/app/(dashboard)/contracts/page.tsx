@@ -55,6 +55,14 @@ export default async function ContractsPage(props: PageProps<"/contracts">) {
   // status, so the tab filtered on a value no contract has ever held and came back empty however
   // near the contracts were to their end. It asks the question the same way the expiring page does.
   const soonEnd = new Date(today.getTime() + 90 * 86_400_000);
+  const daysLeft = (end: Date) => Math.ceil((end.getTime() - today.getTime()) / 86_400_000);
+  /** The closer the end, the hotter the badge — read before it is read as words. */
+  const urgencyTone = (end: Date) => {
+    const days = daysLeft(end);
+    if (days <= 30) return "bg-red-100 text-red-800";
+    if (days <= 60) return "bg-orange-100 text-orange-800";
+    return "bg-amber-100 text-amber-800";
+  };
   const expiringSoon = { status: "ACTIVE" as const, endDate: { gte: today, lte: soonEnd } };
 
   const where = {
@@ -180,14 +188,14 @@ export default async function ContractsPage(props: PageProps<"/contracts">) {
                           <div className="flex flex-col items-start gap-1">
                             <StatusBadge status={c.status} />
                             {c.status === "ACTIVE" && c.endDate < today && (
-                              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                              <span className="rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-medium text-white">
                                 انتهت مدته ولم يُنهَ
                               </span>
                             )}
                             {c.status === "ACTIVE" && c.endDate >= today && c.endDate <= soonEnd && (
-                              <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-800">
-                                {/* The days left say it better than «soon» on a row that may be 80 days out. */}
-                                ينتهي بعد {Math.ceil((c.endDate.getTime() - today.getTime()) / 86_400_000)} يوماً
+                              <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-medium", urgencyTone(c.endDate))}>
+                                {/* Days left, not «soon»: a row eighty days out is not the same errand as one due next week. */}
+                                ينتهي بعد {daysLeft(c.endDate)} يوماً
                               </span>
                             )}
                           </div>

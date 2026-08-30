@@ -323,8 +323,8 @@ export default async function DashboardPage(props: PageProps<"/">) {
           rows={[
             [
               { value: expiring30, label: "خلال شهر", tone: "danger", href: "/contracts/expiring?bucket=30" },
-              { value: expiring60, label: "خلال شهرين", href: "/contracts/expiring?bucket=60" },
-              { value: expiring90, label: "خلال 3 أشهر", href: "/contracts/expiring?bucket=90" },
+              { value: expiring60, label: "خلال شهرين", tone: "warning", href: "/contracts/expiring?bucket=60" },
+              { value: expiring90, label: "خلال 3 أشهر", tone: "caution", href: "/contracts/expiring?bucket=90" },
             ],
           ]}
           footerLabel="عقود على وشك الانتهاء"
