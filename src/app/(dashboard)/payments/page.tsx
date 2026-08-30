@@ -22,6 +22,10 @@ const TABS = [
   { key: "OVERDUE", label: "متأخرة" },
   { key: "PARTIAL", label: "مدفوعة جزئياً" },
   { key: "PAID", label: "مدفوعة" },
+  // Not a payment status but a different kind of debt: what a tenant left owing after the lease
+  // ended. It is chased differently from a sitting tenant's arrears, and it must never be
+  // confused with the debt of whoever rents the unit next.
+  { key: "FORMER", label: "ديون سابقة" },
 ];
 
 export default async function PaymentsPage(props: PageProps<"/payments">) {
@@ -41,9 +45,13 @@ export default async function PaymentsPage(props: PageProps<"/payments">) {
     ...(q ? { q } : {}),
   };
 
+  const isFormer = activeTab === "FORMER";
   const where = {
-    contract: { unit: { building: scope } },
-    ...(activeTab !== "all" ? { status: activeTab as "PENDING" | "OVERDUE" | "PAID" | "PARTIAL" } : {}),
+    contract: { unit: { building: scope }, ...(isFormer ? { status: { not: "ACTIVE" as const } } : {}) },
+    ...(isFormer ? { status: { not: "PAID" as const }, dueDate: { lte: new Date() } } : {}),
+    ...(activeTab !== "all" && !isFormer
+      ? { status: activeTab as "PENDING" | "OVERDUE" | "PAID" | "PARTIAL" }
+      : {}),
     ...(q
       ? {
           OR: [
@@ -168,6 +176,21 @@ export default async function PaymentsPage(props: PageProps<"/payments">) {
                             <Link href={href} className="hover:underline">
                               {p.contract.tenant.name}
                             </Link>
+                            {/* Whose debt this is: a tenant who has gone, or one whose lease
+                                ended while they are still in the unit. Without it, the row looks
+                                like the arrears of whoever lives there now. */}
+                            {p.contract.status !== "ACTIVE" && (
+                              <span
+                                className={cn(
+                                  "ms-1.5 rounded px-1.5 py-0.5 text-[10px] font-medium",
+                                  p.contract.unit.status === "VACANT"
+                                    ? "bg-slate-200 text-slate-700"
+                                    : "bg-amber-100 text-amber-800"
+                                )}
+                              >
+                                {p.contract.unit.status === "VACANT" ? "مستأجر سابق" : "عقد منتهٍ"}
+                              </span>
+                            )}
                           </TableCell>
                           <TableCell>
                             <Link href={href} className="hover:underline">
