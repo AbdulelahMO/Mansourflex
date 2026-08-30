@@ -25,7 +25,8 @@ const CONTRACT_STATUSES = ["ACTIVE", "EXPIRING_SOON", "EXPIRED", "TERMINATED"] a
 const STATUS_TABS = [
   { key: "all", label: "الكل" },
   { key: "ACTIVE", label: "ساري" },
-  { key: "EXPIRING_SOON", label: "قارب على الانتهاء" },
+  // The label names its own window: «قارب» alone reads as sooner than three months.
+  { key: "EXPIRING_SOON", label: "ينتهي خلال 3 أشهر" },
   { key: "EXPIRED", label: "منتهي" },
   { key: "TERMINATED", label: "مفسوخ" },
 ];
@@ -185,7 +186,8 @@ export default async function ContractsPage(props: PageProps<"/contracts">) {
                             )}
                             {c.status === "ACTIVE" && c.endDate >= today && c.endDate <= soonEnd && (
                               <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-800">
-                                قارب على الانتهاء
+                                {/* The days left say it better than «soon» on a row that may be 80 days out. */}
+                                ينتهي بعد {Math.ceil((c.endDate.getTime() - today.getTime()) / 86_400_000)} يوماً
                               </span>
                             )}
                           </div>
