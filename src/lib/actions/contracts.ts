@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requirePermission, recordAudit } from "@/lib/authz";
 import { buildPaymentSchedule } from "@/lib/payment-schedule";
-import { round2 } from "@/lib/documents-core";
+import { round2, issueReceiptForPayment } from "@/lib/documents-core";
 import { formatCurrency } from "@/lib/format";
 import { runSensitive } from "@/lib/approvals";
 import type { ActionState } from "@/lib/types";
@@ -329,7 +329,124 @@ export async function updateContractStatus(id: string, status: "ACTIVE" | "EXPIR
  * Releases the unit once its lease is over: the tenant is out and owes nothing. Held back while
  * anything is due, so a unit is never offered again with the last tenant's debt still open.
  */
-export async function vacateUnit(contractId: string): Promise<ActionState> {
+/**
+ * Settles arrears out of the security deposit the tenant already paid. Not a new collection but
+ * money the operator has held all along, moving from security to rent — so it earns its receipt
+ * like any other, oldest instalment first, and what it covers is recorded so it is never spent twice.
+ */
+export async function applyDepositToArrears(contractId: string): Promise<ActionState> {
+  const { user } = await requirePermission("payments.pay");
+
+  const contract = await prisma.contract.findUnique({ where: { id: contractId } });
+  if (!contract) return { error: "العقد غير موجود" };
+
+  const available = round2((contract.depositAmount ?? 0) - contract.depositApplied);
+  if (available <= 0) {
+    return { error: contract.depositAmount ? "استُهلك التأمين بالكامل" : "لا يوجد تأمين مسجّل على هذا العقد" };
+  }
+
+  const now = new Date();
+  const short = await prisma.payment.findMany({
+    where: { contractId, status: { not: "PAID" }, dueDate: { lte: now } },
+    orderBy: { dueDate: "asc" },
+  });
+  if (short.length === 0) return { error: "لا توجد متأخرات على هذا العقد" };
+
+  let left = available;
+  const receipts: string[] = [];
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      for (const p of short) {
+        if (left <= 0) break;
+        const room = round2(p.amount - (p.paidAmount ?? 0));
+        if (room <= 0) continue;
+        const add = round2(Math.min(left, room));
+        const total = round2((p.paidAmount ?? 0) + add);
+
+        await tx.payment.update({
+          where: { id: p.id },
+          data: {
+            paidAmount: total,
+            paidDate: now,
+            collectedById: user.id,
+            method: "خصم من التأمين",
+            recipient: "OPERATOR",
+            notes: [p.notes, `سُدِّد ${formatCurrency(add)} من تأمين العقد`].filter(Boolean).join(" — "),
+            status: total >= p.amount ? "PAID" : "PARTIAL",
+          },
+        });
+
+        const receipt = await issueReceiptForPayment(p.id, { issuedById: user.id, db: tx, amount: add });
+        if (!receipt.ok) throw new Error(receipt.error);
+        receipts.push(receipt.documentNumber);
+        left = round2(left - add);
+      }
+
+      await tx.contract.update({
+        where: { id: contractId },
+        data: { depositApplied: round2(contract.depositApplied + (available - left)) },
+      });
+    });
+  } catch (err) {
+    return { error: `لم يُخصم التأمين — ${err instanceof Error ? err.message : "خطأ غير متوقع"}` };
+  }
+
+  const used = round2(available - left);
+  await recordAudit({
+    user,
+    action: "payments.pay",
+    summary: `خصم ${formatCurrency(used)} من تأمين العقد ${contract.contractNumber} سداداً لمتأخراته`,
+    targetId: contractId,
+  });
+
+  revalidatePath(`/contracts/${contractId}`);
+  revalidatePath("/payments");
+  revalidatePath("/documents");
+  return {
+    success: true,
+    message: `خُصم ${formatCurrency(used)} من التأمين وصدرت سنداته (${receipts.join("، ")})${
+      left > 0 ? ` — تبقّى من التأمين ${formatCurrency(left)}` : ""
+    }`,
+  };
+}
+
+/** Refers every unpaid instalment that has fallen due to Najiz, so the claim is formally pursued. */
+export async function referContractArrearsToNajiz(contractId: string): Promise<ActionState> {
+  const { user } = await requirePermission("payments.edit");
+
+  const contract = await prisma.contract.findUnique({ where: { id: contractId } });
+  if (!contract) return { error: "العقد غير موجود" };
+
+  const now = new Date();
+  const { count } = await prisma.payment.updateMany({
+    where: { contractId, status: { not: "PAID" }, dueDate: { lte: now }, najizReferredAt: null },
+    data: { najizReferredAt: now },
+  });
+  if (count === 0) return { error: "لا توجد متأخرات غير محالة على هذا العقد" };
+
+  await recordAudit({
+    user,
+    action: "payments.edit",
+    summary: `إحالة متأخرات العقد ${contract.contractNumber} إلى ناجز (${count} دفعة)`,
+    targetId: contractId,
+  });
+
+  revalidatePath(`/contracts/${contractId}`);
+  revalidatePath("/payments/najiz");
+  return { success: true, message: `أُحيلت ${count} دفعة إلى ناجز — يمكنك الآن إخلاء الوحدة والمطالبة قائمة` };
+}
+
+/**
+ * Releases the unit once its lease is over.
+ *
+ * The debt is not what holds the unit — it follows the tenant, not the walls, and keeping an empty
+ * flat off the market for months while a claim runs collects nothing and loses the next tenant's
+ * rent too. What is required is that the debt be dealt with, not collected: settled from the
+ * deposit, referred to Najiz and pursued, or released knowingly with a reason on record. It stays
+ * on the contract either way — in arrears, in collections, and in the owner's statement.
+ */
+export async function vacateUnit(contractId: string, reason?: string): Promise<ActionState> {
   const { user } = await requirePermission("units.edit");
 
   const contract = await prisma.contract.findUnique({
@@ -341,25 +458,43 @@ export async function vacateUnit(contractId: string): Promise<ActionState> {
   if (contract.unit.status === "VACANT") return { error: "الوحدة شاغرة أصلاً" };
 
   const arrears = await contractArrears(contractId);
-  if (arrears > 0) {
-    return {
-      error: `على العقد مستحقات ${formatCurrency(arrears)} — لا تُخلى الوحدة قبل تسويتها، فتبقى المطالبة مرتبطة بها.`,
-    };
+  const note = reason?.trim();
+
+  if (arrears > 0 && !note) {
+    const unreferred = await prisma.payment.count({
+      where: { contractId, status: { not: "PAID" }, dueDate: { lte: new Date() }, najizReferredAt: null },
+    });
+    if (unreferred > 0) {
+      return {
+        error: `على العقد مستحقات ${formatCurrency(arrears)} — اخصمها من التأمين، أو أحِلها إلى ناجز، أو أخلِ الوحدة بإقرار مكتوب.`,
+        needsReason: true,
+      };
+    }
   }
 
   await prisma.unit.update({ where: { id: contract.unit.id }, data: { status: "VACANT" } });
 
+  const tail =
+    arrears > 0
+      ? ` مع بقاء مستحقات ${formatCurrency(arrears)} مطالبةً على المستأجر${note ? ` — ${note}` : " محالة إلى ناجز"}`
+      : "";
   await recordAudit({
     user,
     action: "units.edit",
-    summary: `إخلاء الوحدة ${contract.unit.unitNumber} بعد انتهاء العقد ${contract.contractNumber}`,
+    summary: `إخلاء الوحدة ${contract.unit.unitNumber} بعد انتهاء العقد ${contract.contractNumber}${tail}`,
     targetId: contract.unit.id,
   });
 
   revalidatePath("/contracts");
   revalidatePath(`/contracts/${contractId}`);
   revalidatePath("/units");
-  return { success: true, message: "أصبحت الوحدة شاغرة ومتاحة للتأجير" };
+  return {
+    success: true,
+    message:
+      arrears > 0
+        ? `أصبحت الوحدة شاغرة ومتاحة للتأجير — ومستحقات ${formatCurrency(arrears)} باقية في المتابعة على المستأجر`
+        : "أصبحت الوحدة شاغرة ومتاحة للتأجير",
+  };
 }
 
 export async function deleteContract(id: string, reason?: string): Promise<ActionState> {

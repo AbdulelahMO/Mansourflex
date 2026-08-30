@@ -461,6 +461,8 @@ model Contract {
   increasePercent Float? // نسبة الزيادة السنوية (يُستخدم فقط مع النوع "متزايد")
   vatRate         Float            @default(0) // نسبة ضريبة القيمة المضافة (0, 5, 10, 15)
   depositAmount   Float?
+  /// ما استُهلك من التأمين في سداد متأخرات المستأجر — يمنع خصمه مرتين
+  depositApplied  Float    @default(0)
   paymentFrequency PaymentFrequency @default(MONTHLY)
   status          ContractStatus   @default(ACTIVE)
   notes           String?

@@ -19,6 +19,7 @@ import { cancelFinancialDocument } from "@/lib/actions/documents";
 import { reverseCollection } from "@/lib/actions/payments";
 import { contractArrears } from "@/lib/actions/contracts";
 import { VacateUnitButton } from "@/components/contracts/vacate-unit-button";
+import { SettleArrearsActions } from "@/components/contracts/settle-arrears-actions";
 import { CancelDocumentButton } from "@/components/documents/cancel-document-button";
 
 const AMOUNT_TYPE_LABELS: Record<string, string> = {
@@ -83,6 +84,14 @@ export default async function ContractDetailPage(props: PageProps<"/contracts/[i
 
   // What still holds the unit after the lease is over.
   const arrears = contract.status === "ACTIVE" ? 0 : await contractArrears(contract.id);
+  const depositAvailable = Math.max(0, Math.round(((contract.depositAmount ?? 0) - contract.depositApplied) * 100) / 100);
+  // A claim already before Najiz is being pursued; the unit need not wait on it.
+  const unreferred =
+    arrears > 0
+      ? await prisma.payment.count({
+          where: { contractId: contract.id, status: { not: "PAID" }, dueDate: { lte: new Date() }, najizReferredAt: null },
+        })
+      : 0;
 
   // A payment may carry many receipts but only one invoice.
   const invoiceByPaymentId = new Map(
@@ -157,7 +166,7 @@ export default async function ContractDetailPage(props: PageProps<"/contracts/[i
             <p className="font-medium">انتهى العقد والوحدة ما زالت محجوزة</p>
             <p className="mt-0.5 text-xs">
               {arrears > 0
-                ? `على العقد مستحقات ${formatCurrency(arrears)} — تبقى الوحدة مؤجرة حتى تُسوّى، فلا تُعرض لمستأجر جديد ودين سابقها قائم.`
+                ? `على العقد مستحقات ${formatCurrency(arrears)}. الدين يلاحق المستأجر لا الوحدة — سوِّه من التأمين أو أحِله إلى ناجز أو أخلِ بإقرار، وتبقى المطالبة قائمة في كل الأحوال.`
                 : "المستحقات مسددة — جدّد العقد إن بقي المستأجر، أو أخلِ الوحدة إن خرج."}
             </p>
           </div>
@@ -173,7 +182,16 @@ export default async function ContractDetailPage(props: PageProps<"/contracts/[i
                   renewedToNumber: null,
                 }}
               />
-              <VacateUnitButton contractId={contract.id} arrears={arrears} />
+              {arrears > 0 ? (
+                <SettleArrearsActions
+                  contractId={contract.id}
+                  arrears={arrears}
+                  depositAvailable={depositAvailable}
+                  allReferred={unreferred === 0}
+                />
+              ) : (
+                <VacateUnitButton contractId={contract.id} arrears={0} />
+              )}
             </div>
           )}
         </div>
