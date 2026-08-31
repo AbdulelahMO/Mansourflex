@@ -5,9 +5,8 @@
 # أمان من الحالة الراهنة قبل الكتابة فوقها، ويتحقّق من سلامة النسخة المستعادة بعدها.
 set -euo pipefail
 
-PROJECT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DB="$PROJECT/prisma/dev.db"
-UPLOADS="$PROJECT/uploads"
+# shellcheck source=scripts/paths.sh
+source "$(dirname "${BASH_SOURCE[0]}")/paths.sh"
 
 SRC="${1:-}"
 if [ -z "$SRC" ] || [ ! -f "$SRC/dev.db" ]; then
@@ -28,10 +27,12 @@ read -r -p "متابعة الاستعادة؟ اكتب نعم: " CONFIRM
 [ "$CONFIRM" = "نعم" ] || { echo "أُلغيت."; exit 1; }
 
 # نسخة أمان من الحالة الراهنة، فالاستعادة الخاطئة لا تُفقد شيئاً
-SAFETY="$PROJECT/.restore-safety/$(date +%Y%m%d-%H%M%S)"
+# Beside the database, which on a server is the volume — a safety copy written into an
+# ephemeral checkout is gone the next time the container is rebuilt.
+SAFETY="$(dirname "$DB")/.restore-safety/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$SAFETY"
 [ -f "$DB" ] && sqlite3 "$DB" "VACUUM INTO '$SAFETY/dev.db';"
-[ -d "$UPLOADS" ] && tar -czf "$SAFETY/uploads.tar.gz" -C "$PROJECT" uploads
+[ -d "$UPLOADS" ] && tar -czf "$SAFETY/uploads.tar.gz" -C "$UPLOADS_PARENT" "$UPLOADS_NAME"
 echo "✓ حُفظت الحالة الراهنة في: $SAFETY"
 
 cp "$SRC/dev.db" "$DB"
@@ -40,7 +41,7 @@ rm -f "$DB-wal" "$DB-shm"
 
 if [ -f "$SRC/uploads.tar.gz" ]; then
   rm -rf "$UPLOADS"
-  tar -xzf "$SRC/uploads.tar.gz" -C "$PROJECT"
+  tar -xzf "$SRC/uploads.tar.gz" -C "$UPLOADS_PARENT"
 fi
 
 AFTER="$(sqlite3 "$DB" "PRAGMA integrity_check;")"

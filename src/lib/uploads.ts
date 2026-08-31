@@ -2,8 +2,7 @@ import "server-only";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import crypto from "crypto";
-
-const UPLOADS_ROOT = path.join(process.cwd(), "uploads");
+import { UPLOADS_ROOT } from "./paths";
 
 const ALLOWED_EXTENSIONS = new Set([".pdf", ".png", ".jpg", ".jpeg", ".webp"]);
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB

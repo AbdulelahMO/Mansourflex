@@ -6,9 +6,8 @@
 # كان النظام يكتب، ثم يُتحقّق من سلامتها قبل اعتمادها.
 set -euo pipefail
 
-PROJECT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DB="$PROJECT/prisma/dev.db"
-UPLOADS="$PROJECT/uploads"
+# shellcheck source=scripts/paths.sh
+source "$(dirname "${BASH_SOURCE[0]}")/paths.sh"
 
 DEST="${1:-${BACKUP_DIR:-$HOME/Library/Mobile Documents/com~apple~CloudDocs/property-manager-backups}}"
 KEEP_DAYS="${KEEP_DAYS:-14}"
@@ -32,13 +31,13 @@ fi
 
 # المرفقات: الصكوك والاتفاقيات الموقّعة وصور العقارات وفواتير الموردين
 if [ -d "$UPLOADS" ]; then
-  tar -czf "$OUT/uploads.tar.gz" -C "$PROJECT" uploads
+  tar -czf "$OUT/uploads.tar.gz" -C "$UPLOADS_PARENT" "$UPLOADS_NAME"
 fi
 
 # بيان يوصف ما في النسخة، ليُتحقّق منه عند الاستعادة
 {
   echo "التاريخ: $(date '+%Y-%m-%d %H:%M:%S')"
-  echo "المصدر: $PROJECT"
+  echo "المصدر: $DB"
   echo "حجم القاعدة: $(du -h "$OUT/dev.db" | cut -f1)"
   [ -f "$OUT/uploads.tar.gz" ] && echo "حجم المرفقات: $(du -h "$OUT/uploads.tar.gz" | cut -f1)"
   echo "سلامة القاعدة: $INTEGRITY"

@@ -4,6 +4,10 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  // Behind a reverse proxy Auth.js refuses every request whose Host it was not told to
+  // trust, and says so only in the server log — the sign-in page still renders, so the
+  // instance looks up while nobody can sign in. This deployment owns its own hosts.
+  trustHost: true,
   session: { strategy: "jwt" },
   pages: {
     signIn: "/login",

@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -45,6 +46,11 @@ next-env.d.ts
 # sqlite dev database
 /prisma/dev.db
 /prisma/dev.db-journal
+/prisma/dev.db-wal
+/prisma/dev.db-shm
+
+# safety copies taken by scripts/restore.sh before it overwrites
+.restore-safety
 
 # uploaded files (use real object storage in production)
 /uploads

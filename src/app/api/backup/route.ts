@@ -7,6 +7,7 @@ import { promisify } from "util";
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/session";
 import { recordAudit } from "@/lib/authz-core";
+import { UPLOADS_ROOT, sqliteFile } from "@/lib/paths";
 
 const run = promisify(execFile);
 
@@ -19,9 +20,10 @@ export async function GET() {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const project = process.cwd();
-  const db = path.join(project, "prisma", "dev.db");
-  if (!existsSync(db)) {
+  // The file the application actually writes — on a server that is on the mounted
+  // volume, not under the checkout.
+  const db = sqliteFile();
+  if (!db || !existsSync(db)) {
     return NextResponse.json({ error: "قاعدة البيانات غير موجودة" }, { status: 500 });
   }
 
@@ -41,8 +43,12 @@ export async function GET() {
 
     // Attachments travel with the database: deeds, signed agreements, photos and invoices
     // are referenced by it, and a database without them restores to broken links.
+    // Entered by its parent so the archive keeps a top-level `uploads/`, which is the
+    // shape `scripts/restore.sh` extracts — wherever the directory itself now lives.
     const parts = ["-czf", archive, "-C", work, "dev.db"];
-    if (existsSync(path.join(project, "uploads"))) parts.push("-C", project, "uploads");
+    if (existsSync(UPLOADS_ROOT)) {
+      parts.push("-C", path.dirname(UPLOADS_ROOT), path.basename(UPLOADS_ROOT));
+    }
     await run("tar", parts);
 
     const data = await readFile(archive);

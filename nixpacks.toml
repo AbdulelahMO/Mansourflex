@@ -1,0 +1,8 @@
+# النسخة الاحتياطية داخل النظام تستدعي `sqlite3`، ولا تحمله صورة Node.
+#
+# The backup route runs `VACUUM INTO` rather than copying the file, because copying a
+# database while the application writes to it can produce a snapshot that is corrupt and
+# says nothing about it until the day it is needed. Without the binary that route returns
+# a 500 and the button in the settings screen simply never works.
+[phases.setup]
+aptPkgs = ["sqlite3"]
