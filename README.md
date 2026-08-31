@@ -1,36 +1,67 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# فليكس — نظام إدارة الأملاك العقارية
 
-## Getting Started
+نظام لإدارة العقارات والوحدات والملاك والمستأجرين وعقود الإيجار وتحصيلها، بواجهة عربية من اليمين إلى اليسار. يخدم مكاتب إدارة الأملاك التي تدير عقارات غيرها، والمُلّاك الذين يديرون عقاراتهم بأنفسهم.
 
-First, run the development server:
+## ما يغطّيه
+
+| المجال | التفصيل |
+|--------|---------|
+| العقارات | المباني والوحدات، الصكوك، الموقع على الخريطة، العدّادات، جهات الاتصال، الصور |
+| الملاك | بياناتهم، اتفاقيات الإدارة وعمولاتها، كشوف الحساب، سندات التوريد، وبوابة دخول اختيارية |
+| الإيجارات | العقود وجداول أقساطها، التجديد، الفسخ، وإخلاء الوحدات |
+| التحصيل | تسجيل الدفعات، الترحيل التلقائي للفائض، الإحالة إلى ناجز، وديون المستأجرين السابقين |
+| المستندات | الفواتير وسندات القبض والصرف والتوريد — تُلغى ولا تُحذف |
+| الإدارة | الموظفون والأدوار والصلاحيات، طلبات الموافقة، وسجل العمليات |
+
+## قواعد يقوم عليها النظام
+
+- **لا يُسجَّل ريال بلا سند.** التحصيل ومستنداته يُكتبان في معاملة واحدة؛ فسندٌ يتعذّر إصداره يترك الدفعة غير مسجَّلة.
+- **المستند المالي يُلغى ولا يُحذف.** يبقى رقمه وسببُ إلغائه ومن ألغاه.
+- **حالة الوحدة يقولها عقدها.** تصير مؤجرة بكتابة العقد، ولا تُخلى إلا بقرار صريح.
+- **الدين يلاحق المستأجر لا الوحدة.** لا تُحبس شقة صالحة للتأجير بسبب دين سابقها.
+- **الإجراءات الحسّاسة تمرّ بموافقة.** الموظف يرفع طلباً، ومدير النظام يقرّر.
+
+## التشغيل
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npx prisma migrate deploy    # إنشاء قاعدة البيانات
+npm run db:seed              # الأدوار الأربعة وحساب المدير
+npm run dev                  # التطوير على المنفذ 3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+للإنتاج:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run build && npm start
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+متغيّرات البيئة في `.env`:
 
-## Learn More
+| المتغيّر | الغرض |
+|----------|-------|
+| `DATABASE_URL` | مسار قاعدة SQLite |
+| `AUTH_SECRET` | مفتاح توقيع الجلسات |
+| `AUTH_TRUST_HOST` | يلزم عند التشغيل خلف نطاق غير localhost |
 
-To learn more about Next.js, take a look at the following resources:
+## النسخ الاحتياطي
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+scripts/backup.sh            # لقطة متّسقة للقاعدة مع المرفقات
+scripts/restore.sh <ملف>     # الاستعادة
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+وللمدير زرّ تنزيل نسخة من **بيانات المنشأة** داخل النظام.
 
-## Deploy on Vercel
+## أدوات الفحص
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npx tsx scripts/audit-contract-states.ts    # اتفاق العقود مع حالات وحداتها
+npx tsx scripts/audit-permission-keys.ts    # مفاتيح صلاحيات ميتة في الأدوار
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## البنية
+
+Next.js (App Router) · Prisma · SQLite · NextAuth · Tailwind
+
+**نسخة مستقلة لكل عميل**: قاعدة بيانات وتشغيل منفصلان، فلا تتداخل بيانات عميل بآخر.
