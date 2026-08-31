@@ -106,8 +106,11 @@ export function BulkUnitsDialog({ buildingId }: { buildingId: string }) {
             <Input id="startFrom" name="startFrom" type="number" value={startFrom} onChange={(e) => setStartFrom(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="prefix">سابقة</Label>
-            <Input id="prefix" name="prefix" value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="M" dir="ltr" />
+            {/* «سابقة» is the right word and the wrong label: it is grammar, not something an
+                operator says. What they want to know is where what they type ends up. */}
+            <Label htmlFor="prefix">حرف قبل الرقم</Label>
+            <Input id="prefix" name="prefix" value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="M" />
+            <p className="text-[11px] text-muted-foreground">اختياري — M تعطي M1 M2</p>
           </div>
         </div>
       )}
