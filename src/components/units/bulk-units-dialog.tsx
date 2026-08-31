@@ -16,8 +16,18 @@ const UNIT_TYPE_OPTIONS = ["شقة", "محل", "مكتب", "دور", "استود
 /**
  * Adds a building's units in one pass. The numbers are previewed before anything is written —
  * a wrong floor count is cheap to notice here and expensive to undo after thirty rows exist.
+ *
+ * Opened from a building, that building is the subject and needs no choosing; opened from the
+ * units list it is the first thing asked. One of the two is always supplied, never both — two
+ * fields of the same name in one form and the last one wins, silently.
  */
-export function BulkUnitsDialog({ buildingId }: { buildingId: string }) {
+export function BulkUnitsDialog({
+  buildingId,
+  buildings,
+}: {
+  buildingId?: string;
+  buildings?: { id: string; name: string }[];
+}) {
   const [mode, setMode] = useState<NumberingMode>("floors");
   const [floors, setFloors] = useState("3");
   const [perFloor, setPerFloor] = useState("4");
@@ -55,7 +65,25 @@ export function BulkUnitsDialog({ buildingId }: { buildingId: string }) {
       action={createUnitsBulk}
       submitLabel={preview.length ? `إنشاء ${preview.length} وحدة` : "إنشاء"}
     >
-      <input type="hidden" name="buildingId" value={buildingId} />
+      {buildingId ? (
+        <input type="hidden" name="buildingId" value={buildingId} />
+      ) : (
+        <div className="space-y-1.5">
+          <Label htmlFor="bulkBuilding">المبنى</Label>
+          <Select name="buildingId" required>
+            <SelectTrigger className="w-full" id="bulkBuilding">
+              <SelectValue placeholder="اختر المبنى" />
+            </SelectTrigger>
+            <SelectContent>
+              {(buildings ?? []).map((b) => (
+                <SelectItem key={b.id} value={b.id}>
+                  {b.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       <input type="hidden" name="mode" value={mode} />
 
       <div className="flex gap-1 rounded-lg bg-muted p-1">

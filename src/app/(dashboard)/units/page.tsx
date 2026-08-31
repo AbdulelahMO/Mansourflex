@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { StatusBadge } from "@/components/status-badge";
 import { formatCurrency } from "@/lib/format";
 import { CreateUnitDialog, EditUnitDialog } from "@/components/units/unit-dialogs";
+import { BulkUnitsDialog } from "@/components/units/bulk-units-dialog";
 import { DeleteButton } from "@/components/delete-button";
 import { deleteUnit } from "@/lib/actions/units";
 import { PaginationTopBar, PaginationNav } from "@/components/pagination/pagination-controls";
@@ -86,7 +87,12 @@ export default async function UnitsPage(props: PageProps<"/units">) {
             {rawType ? `وحدات من نوع: ${rawType}` : "جميع الوحدات في كل المباني"}
           </p>
         </div>
-        {canManage && buildings.length > 0 && <CreateUnitDialog buildings={buildings} />}
+        {canManage && buildings.length > 0 && (
+          <div className="flex items-center gap-2">
+            <BulkUnitsDialog buildings={buildings} />
+            <CreateUnitDialog buildings={buildings} />
+          </div>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
