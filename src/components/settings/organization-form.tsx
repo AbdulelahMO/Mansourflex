@@ -8,7 +8,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SubmitButton } from "@/components/submit-button";
 import { updateOrganizationSettings } from "@/lib/actions/organization";
 import { initialActionState } from "@/lib/types";
-import { DEFAULT_AGREEMENT_PREAMBLE, DEFAULT_AGREEMENT_CLOSING } from "@/lib/agreement-text";
 import { ImageIcon } from "lucide-react";
 
 type OrganizationSettings = {
@@ -20,8 +19,6 @@ type OrganizationSettings = {
   nationalAddress: string | null;
   signatoryName: string | null;
   signatoryTitle: string | null;
-  agreementPreamble: string | null;
-  agreementClosing: string | null;
   logoUrl: string | null;
 } | null;
 
@@ -90,35 +87,6 @@ export function OrganizationForm({ settings }: { settings: OrganizationSettings 
                 name="signatoryTitle"
                 defaultValue={settings?.signatoryTitle ?? ""}
                 placeholder="مثال: المدير العام"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-3 rounded-lg border p-4">
-            <div>
-              <p className="text-sm font-semibold">نصوص اتفاقية الإدارة</p>
-              <p className="text-xs text-muted-foreground">
-                تظهر في صيغة الاتفاقية المطبوعة. اتركها فارغة لاستخدام الصياغة الافتراضية.
-              </p>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="agreementPreamble">التمهيد</Label>
-              <Textarea
-                id="agreementPreamble"
-                name="agreementPreamble"
-                rows={5}
-                defaultValue={settings?.agreementPreamble ?? ""}
-                placeholder={DEFAULT_AGREEMENT_PREAMBLE}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="agreementClosing">الخاتمة (قبل التوقيعات)</Label>
-              <Textarea
-                id="agreementClosing"
-                name="agreementClosing"
-                rows={2}
-                defaultValue={settings?.agreementClosing ?? ""}
-                placeholder={DEFAULT_AGREEMENT_CLOSING}
               />
             </div>
           </div>

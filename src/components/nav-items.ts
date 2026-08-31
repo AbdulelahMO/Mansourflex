@@ -19,6 +19,8 @@ import {
   Landmark,
   Wallet2,
   Settings,
+  DatabaseBackup,
+  Upload,
   type LucideIcon,
 } from "lucide-react";
 
@@ -52,6 +54,8 @@ export const navItems: NavItem[] = [
   { href: "/settings/employees", label: "الموظفون والصلاحيات", icon: UsersRound, adminOnly: true },
   { href: "/settings/audit", label: "سجل العمليات", icon: History, permission: "audit.view" },
   { href: "/settings/organization", label: "بيانات المنشأة", icon: Building, permission: "settings.organization" },
+  { href: "/settings/import", label: "استيراد البيانات", icon: Upload, permission: "contracts.create" },
+  { href: "/settings/data", label: "البيانات والنسخ", icon: DatabaseBackup, permission: "settings.organization" },
   { href: "/settings/integrations", label: "الربط والتكاملات", icon: Plug, permission: "settings.integrations" },
 ];
 
@@ -122,6 +126,8 @@ export const navEntries: NavEntry[] = [
         item("/settings/employees"),
         item("/settings/audit"),
         item("/settings/organization"),
+        item("/settings/import"),
+        item("/settings/data"),
         item("/settings/integrations"),
       ],
     },

@@ -19,8 +19,6 @@ const organizationSchema = z.object({
   nationalAddress: z.string().trim().optional().or(z.literal("")),
   signatoryName: z.string().trim().optional().or(z.literal("")),
   signatoryTitle: z.string().trim().optional().or(z.literal("")),
-  agreementPreamble: z.string().trim().optional().or(z.literal("")),
-  agreementClosing: z.string().trim().optional().or(z.literal("")),
 });
 
 export async function getOrganizationSettings() {
@@ -59,8 +57,6 @@ export async function updateOrganizationSettings(_prev: ActionState, formData: F
       nationalAddress: data.nationalAddress || null,
       signatoryName: data.signatoryName || null,
       signatoryTitle: data.signatoryTitle || null,
-      agreementPreamble: data.agreementPreamble || null,
-      agreementClosing: data.agreementClosing || null,
       ...(logoUrl ? { logoUrl } : {}),
     },
     update: {
@@ -72,8 +68,6 @@ export async function updateOrganizationSettings(_prev: ActionState, formData: F
       nationalAddress: data.nationalAddress || null,
       signatoryName: data.signatoryName || null,
       signatoryTitle: data.signatoryTitle || null,
-      agreementPreamble: data.agreementPreamble || null,
-      agreementClosing: data.agreementClosing || null,
       ...(logoUrl ? { logoUrl } : {}),
     },
   });
@@ -82,4 +76,26 @@ export async function updateOrganizationSettings(_prev: ActionState, formData: F
   revalidatePath("/documents", "layout");
   revalidatePath("/agreements", "layout");
   return { success: true, message: "تم حفظ بيانات المنشأة" };
+}
+
+/**
+ * Saves the wording agreements are printed with, on its own.
+ *
+ * Kept apart from the organisation form: that form writes every field it carries, so a page that
+ * shows only the identity fields would blank the agreement text every time it was saved.
+ */
+export async function updateAgreementText(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requirePermission("agreements.edit");
+
+  const preamble = String(formData.get("agreementPreamble") ?? "").trim();
+  const closing = String(formData.get("agreementClosing") ?? "").trim();
+
+  await prisma.organizationSettings.upsert({
+    where: { id: ORG_SETTINGS_ID },
+    create: { id: ORG_SETTINGS_ID, agreementPreamble: preamble || null, agreementClosing: closing || null },
+    update: { agreementPreamble: preamble || null, agreementClosing: closing || null },
+  });
+
+  revalidatePath("/agreements");
+  return { success: true, message: "حُفظت نصوص الاتفاقية" };
 }

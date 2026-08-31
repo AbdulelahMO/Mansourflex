@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requirePagePermission } from "@/lib/authz";
+import { AgreementTextCard } from "@/components/agreements/agreement-text-card";
+import { requirePagePermission, can } from "@/lib/authz";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -61,6 +62,14 @@ export default async function AgreementsPage(props: PageProps<"/agreements">) {
 
   const total = await prisma.managementAgreement.count({ where });
   const { skip, take } = paginate(total, page, size);
+
+  const [canEdit, org] = await Promise.all([
+    can("agreements.edit"),
+    prisma.organizationSettings.findUnique({
+      where: { id: "default" },
+      select: { agreementPreamble: true, agreementClosing: true },
+    }),
+  ]);
 
   const agreements = await prisma.managementAgreement.findMany({
     where,
@@ -187,6 +196,10 @@ export default async function AgreementsPage(props: PageProps<"/agreements">) {
           <PaginationNav basePath="/agreements" total={total} page={page} size={size} extraParams={extraParams} />
         </>
       )}
+
+      {/* The wording every agreement prints with — beside the agreements, not filed under the
+          organisation's own details where no one goes looking for a contract clause. */}
+      {canEdit && <AgreementTextCard preamble={org?.agreementPreamble ?? null} closing={org?.agreementClosing ?? null} />}
     </div>
   );
 }
