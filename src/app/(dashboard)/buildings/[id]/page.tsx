@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { CreateUnitDialog, EditUnitDialog } from "@/components/units/unit-dialogs";
+import { BulkUnitsDialog } from "@/components/units/bulk-units-dialog";
 import { DeleteButton } from "@/components/delete-button";
 import { deleteUnit } from "@/lib/actions/units";
 import { deleteBuilding } from "@/lib/actions/buildings";
@@ -284,7 +285,12 @@ export default async function BuildingDetailPage(props: PageProps<"/buildings/[i
       <Card className="gap-0 py-0">
         <CardHeader className="flex-row items-center justify-between space-y-0 border-b py-3.5">
           <CardTitle className="text-base">الوحدات ({building.units.length})</CardTitle>
-          {canManage && <CreateUnitDialog buildingId={building.id} />}
+          {canManage && (
+            <div className="flex items-center gap-2">
+              <BulkUnitsDialog buildingId={building.id} />
+              <CreateUnitDialog buildingId={building.id} />
+            </div>
+          )}
         </CardHeader>
         <CardContent className="p-0">
           {building.units.length === 0 ? (
