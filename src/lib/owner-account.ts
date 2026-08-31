@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { commissionByBuilding } from "@/lib/commission";
+import { computeAccount } from "@/lib/owner-account-math";
 
 export type Period = { from: Date; to: Date };
 
@@ -87,26 +88,12 @@ export async function buildingAccount(
   const ownerExpenses = expenseAgg._sum.amount ?? 0;
   const remitted = remittanceAgg._sum.amount ?? 0;
 
-  const netCollected = collected - ownerExpenses;
-  const commission = netCollected * (commissionPercent / 100);
-  const payableToOwner = netCollected - commission;
-
   return {
     buildingId,
     buildingName,
     units: unitCount,
     occupiedUnits: occupiedCount,
-    billed,
-    outstanding,
-    collected,
-    collectedByOwner,
-    ownerExpenses,
-    netCollected,
-    commissionPercent,
-    commission,
-    payableToOwner,
-    remitted,
-    balance: payableToOwner - collectedByOwner - remitted,
+    ...computeAccount({ billed, outstanding, collected, collectedByOwner, ownerExpenses, commissionPercent, remitted }),
   };
 }
 

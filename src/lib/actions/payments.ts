@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requirePermission, recordAudit } from "@/lib/authz";
 import { issueReceiptForPayment, round2 } from "@/lib/documents-core";
+import { allocate } from "@/lib/allocation";
 import { runSensitive } from "@/lib/approvals";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { ActionState } from "@/lib/types";
@@ -36,10 +37,6 @@ export async function markPaymentPaid(id: string, _prev: ActionState, formData: 
   }
 
   const paidDate = new Date(data.paidDate);
-  // Rounded to the halala: 1583.33 − 934 is 649.3299999999999 in binary, and paying the
-  // remainder exactly as the screen shows it would otherwise be rejected as an overpayment.
-  const remainingOn = (p: { amount: number; paidAmount: number | null }) =>
-    Math.max(0, round2(p.amount - (p.paidAmount ?? 0)));
 
   // Anything beyond this payment's remainder rolls onto the upcoming payments of the same
   // contract, oldest first. The plan is settled in full before anything is written, so an
@@ -54,22 +51,10 @@ export async function markPaymentPaid(id: string, _prev: ActionState, formData: 
     orderBy: [{ dueDate: "asc" }],
   });
 
-  const allocations: { payment: typeof payment; add: number; carried: boolean }[] = [];
-  let left = newlyPaid;
-
-  const firstAdd = round2(Math.min(left, remainingOn(payment)));
-  if (firstAdd > 0) {
-    allocations.push({ payment, add: firstAdd, carried: false });
-    left = round2(left - firstAdd);
-  }
-  for (const next of upcoming) {
-    if (left <= 0) break;
-    const room = remainingOn(next);
-    if (room <= 0) continue;
-    const add = round2(Math.min(left, room));
-    allocations.push({ payment: next, add, carried: true });
-    left = round2(left - add);
-  }
+  const plan = allocate(newlyPaid, [payment, ...upcoming]);
+  // Index 0 is the instalment the money was meant for; the rest is what rolled onto the next.
+  const allocations = plan.allocations.map((a) => ({ payment: a.target, add: a.add, carried: a.index > 0 }));
+  const left = plan.left;
 
   if (left > 0) {
     return {

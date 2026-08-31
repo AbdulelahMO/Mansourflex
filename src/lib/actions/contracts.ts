@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission, recordAudit } from "@/lib/authz";
 import { buildPaymentSchedule } from "@/lib/payment-schedule";
 import { round2, issueReceiptForPayment } from "@/lib/documents-core";
+import { allocate } from "@/lib/allocation";
 import { formatCurrency } from "@/lib/format";
 import { runSensitive } from "@/lib/approvals";
 import type { ActionState } from "@/lib/types";
@@ -352,16 +353,14 @@ export async function applyDepositToArrears(contractId: string): Promise<ActionS
   });
   if (short.length === 0) return { error: "لا توجد متأخرات على هذا العقد" };
 
-  let left = available;
+  // The deposit fills the oldest instalments first, exactly as an overpayment rolls forward.
+  const plan = allocate(available, short);
+  const left = plan.left;
   const receipts: string[] = [];
 
   try {
     await prisma.$transaction(async (tx) => {
-      for (const p of short) {
-        if (left <= 0) break;
-        const room = round2(p.amount - (p.paidAmount ?? 0));
-        if (room <= 0) continue;
-        const add = round2(Math.min(left, room));
+      for (const { target: p, add } of plan.allocations) {
         const total = round2((p.paidAmount ?? 0) + add);
 
         await tx.payment.update({
@@ -380,7 +379,6 @@ export async function applyDepositToArrears(contractId: string): Promise<ActionS
         const receipt = await issueReceiptForPayment(p.id, { issuedById: user.id, db: tx, amount: add });
         if (!receipt.ok) throw new Error(receipt.error);
         receipts.push(receipt.documentNumber);
-        left = round2(left - add);
       }
 
       await tx.contract.update({
