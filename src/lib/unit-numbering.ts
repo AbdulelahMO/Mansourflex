@@ -43,7 +43,9 @@ export function buildUnitNumbers(input: NumberingInput): { unitNumber: string; f
 
   const count = Math.max(0, Math.floor(input.count ?? 0));
   const start = Math.floor(input.startFrom ?? 1);
-  const prefix = (input.prefix ?? "").trim();
+  // Taken as typed, not trimmed: «محل » with its space gives «محل 1», and trimming it would
+  // silently produce «محل1» — the preview shows whichever it is, so the operator decides.
+  const prefix = input.prefix ?? "";
 
   for (let i = 0; i < count && out.length < MAX_BULK_UNITS; i++) {
     out.push({ unitNumber: `${prefix}${start + i}`, floor: null });
