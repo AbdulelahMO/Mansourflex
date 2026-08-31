@@ -3,6 +3,7 @@ import { getOrganizationSettings } from "@/lib/actions/organization";
 import { OrganizationForm } from "@/components/settings/organization-form";
 import { BackupCard } from "@/components/settings/backup-card";
 import { ResetCard } from "@/components/settings/reset-card";
+import { ImportCard } from "@/components/settings/import-card";
 
 export default async function OrganizationSettingsPage() {
   await requirePagePermission("settings.organization");
@@ -17,6 +18,7 @@ export default async function OrganizationSettingsPage() {
 
       <OrganizationForm settings={settings} />
 
+      <ImportCard />
       <BackupCard />
       <ResetCard />
     </div>
