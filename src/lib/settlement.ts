@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { vatWithin } from "@/lib/commission";
 
 export type SettlementPreview = {
   periodFrom: Date;
@@ -6,6 +7,9 @@ export type SettlementPreview = {
   collected: number;
   ownerExpenses: number;
   netCollected: number;
+  /** The tax inside the collection — out of the commission's reach, and the owner's to remit. */
+  collectedVat: number;
+  commissionBase: number;
   commissionPercent: number;
   commission: number;
   operatorExpenses: number;
@@ -34,10 +38,10 @@ export async function buildSettlement(agreementId: string, settledAt: Date): Pro
   const periodTo = settledAt < agreement.endDate ? settledAt : agreement.endDate;
   const buildingId = line.buildingId;
 
-  const [collectedAgg, ownerAgg, operatorAgg, pendingExpenseAgg, duePayments] = await Promise.all([
-    prisma.payment.aggregate({
+  const [collections, ownerAgg, operatorAgg, pendingExpenseAgg, duePayments] = await Promise.all([
+    prisma.payment.findMany({
       where: { contract: { unit: { buildingId } }, paidDate: { gte: periodFrom, lte: periodTo } },
-      _sum: { paidAmount: true },
+      select: { paidAmount: true, contract: { select: { vatRate: true } } },
     }),
     prisma.expense.aggregate({
       where: { buildingId, bearer: "OWNER", paidDate: { gte: periodFrom, lte: periodTo } },
@@ -63,11 +67,14 @@ export async function buildSettlement(agreementId: string, settledAt: Date): Pro
     }),
   ]);
 
-  const collected = collectedAgg._sum.paidAmount ?? 0;
+  const collected = collections.reduce((sum, p) => sum + (p.paidAmount ?? 0), 0);
+  const collectedVat = vatWithin(collections);
   const ownerExpenses = ownerAgg._sum.amount ?? 0;
   const operatorExpenses = operatorAgg._sum.amount ?? 0;
   const netCollected = collected - ownerExpenses;
-  const commission = netCollected * (line.commissionPercent / 100);
+  // The same rule the statement and the property page hold to: no commission on the state's tax.
+  const commissionBase = netCollected - collectedVat;
+  const commission = commissionBase * (line.commissionPercent / 100);
 
   return {
     periodFrom,
@@ -75,6 +82,8 @@ export async function buildSettlement(agreementId: string, settledAt: Date): Pro
     collected,
     ownerExpenses,
     netCollected,
+    collectedVat,
+    commissionBase,
     commissionPercent: line.commissionPercent,
     commission,
     operatorExpenses,

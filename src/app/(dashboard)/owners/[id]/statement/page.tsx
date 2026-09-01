@@ -209,10 +209,10 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
                   <TableHead className="text-left">المصروفات</TableHead>
                   <TableHead className="text-left print:hidden">أساس العمولة</TableHead>
                   <TableHead className="text-left">العمولة</TableHead>
-                  <TableHead className="text-left">مستحق المالك</TableHead>
+                  <TableHead className="text-left">نصيب المالك</TableHead>
                   <TableHead className="text-left">قبضه المالك</TableHead>
-                  <TableHead className="text-left">المورَّد</TableHead>
-                  <TableHead className="text-left">الرصيد</TableHead>
+                  <TableHead className="text-left">المحوَّل له</TableHead>
+                  <TableHead className="text-left">رصيد المالك</TableHead>
                   <TableHead className="print:hidden">خيارات</TableHead>
                 </TableRow>
               </TableHeader>
@@ -326,8 +326,8 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
           <p className="text-xs leading-6 text-muted-foreground">
             {/* Only what the column headings cannot say for themselves. */}
             «إيراد الفترة» ما تستحقه العقود القائمة لا طاقة العقار كاملة · العمولة على الإيجار بعد المصروفات
-            دون الضريبة، والضريبة تبقى في مستحق المالك ليوردها · ما قبضه المالك مباشرة يُخصم من مستحقه
-            وتبقى العمولة عليه · الرصيد بالسالب يعني أن المالك مدين للمكتب.
+            دون الضريبة، والضريبة تبقى في نصيب المالك ليوردها · ما قبضه المالك مباشرة يُخصم من نصيبه
+            وتبقى العمولة عليه · الرصيد بالسالب يعني أن المالك مدين للمشغل.
           </p>
         </CardContent>
       </Card>

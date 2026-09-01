@@ -154,7 +154,7 @@ export default async function OwnerPortalPage(props: PageProps<"/portal">) {
                   <TableHead className="text-left">المصروفات</TableHead>
                   <TableHead className="text-left">عمولة الإدارة</TableHead>
                   <TableHead className="text-left">مستحقك</TableHead>
-                  <TableHead className="text-left">المورَّد لك</TableHead>
+                  <TableHead className="text-left">المحوَّل لك</TableHead>
                   <TableHead className="text-left">الرصيد</TableHead>
                 </TableRow>
               </TableHeader>

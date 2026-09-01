@@ -11,7 +11,7 @@ import { DeleteButton } from "@/components/delete-button";
 import { deleteAgreement } from "@/lib/actions/agreements";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { netCollected } from "@/lib/commission";
+import { netCollected, commissionBase, vatWithin } from "@/lib/commission";
 import { ownerExpensesByBuilding, operatorExpensesByBuilding } from "@/lib/expenses";
 import { buildSettlement } from "@/lib/settlement";
 import { SettleAgreementDialog } from "@/components/agreements/settle-dialog";
@@ -82,17 +82,19 @@ export default async function AgreementDetailPage(props: PageProps<"/agreements/
 
   const lines = await Promise.all(
     agreement.buildings.map(async (line) => {
-      const agg = await prisma.payment.aggregate({
+      const collections = await prisma.payment.findMany({
         where: {
           contract: { unit: { buildingId: line.buildingId } },
           paidDate: { gte: period.from, lte: period.to },
         },
-        _sum: { paidAmount: true },
+        select: { paidAmount: true, contract: { select: { vatRate: true } } },
       });
-      const collected = agg._sum.paidAmount ?? 0;
+      const collected = collections.reduce((sum, p) => sum + (p.paidAmount ?? 0), 0);
+      const vat = vatWithin(collections);
       const expenses = expensesByBuilding.get(line.buildingId) ?? 0;
       const net = netCollected({ collected, expenses });
-      const commission = net * (line.commissionPercent / 100);
+      // No commission on the state's tax — the same rule the statement and settlement hold to.
+      const commission = commissionBase({ collected, expenses, vat }) * (line.commissionPercent / 100);
       // Expenses the operator carried reduce its own commission, never the owner's income.
       const operatorExpenses = operatorExpensesMap.get(line.buildingId) ?? 0;
       return { ...line, collected, expenses, net, commission, operatorExpenses, netCommission: commission - operatorExpenses };

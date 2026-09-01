@@ -14,7 +14,7 @@ import { BulkUnitsDialog } from "@/components/units/bulk-units-dialog";
 import { DeleteButton } from "@/components/delete-button";
 import { deleteUnit } from "@/lib/actions/units";
 import { deleteBuilding } from "@/lib/actions/buildings";
-import { commissionForBuilding, commissionAmount, netCollected, COMMISSION_BASIS_LABEL } from "@/lib/commission";
+import { commissionForBuilding, commissionAmount, commissionBase, vatWithin } from "@/lib/commission";
 import { ownerExpensesForBuilding, operatorExpensesForBuilding } from "@/lib/expenses";
 import { cn } from "@/lib/utils";
 import { BuildingLocationMap } from "@/components/buildings/building-location-map";
@@ -28,6 +28,60 @@ function InfoItem({ label, value }: { label: string; value: string | number | nu
     <div>
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="text-sm font-medium">{value}</p>
+    </div>
+  );
+}
+
+/** One figure at a glance, with the one line of context that keeps it from being misread. */
+function Tile({
+  label,
+  value,
+  tone,
+  children,
+}: {
+  label: string;
+  value: string;
+  tone?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className={cn("text-lg font-bold tabular-nums", tone)}>{value}</p>
+      {children && <p className="text-xs text-muted-foreground">{children}</p>}
+    </div>
+  );
+}
+
+/** One line of the property's account: what it is on the right, what it comes to on the left. */
+function Row({
+  label,
+  value,
+  muted,
+  strong,
+  divider,
+  negative,
+}: {
+  label: string;
+  value: number;
+  muted?: boolean;
+  strong?: boolean;
+  divider?: boolean;
+  /** A balance that has turned against its owner is stated in red, not by a minus sign alone. */
+  negative?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-baseline justify-between gap-4",
+        divider && "border-t pt-1.5",
+        muted && "text-muted-foreground"
+      )}
+    >
+      <dt className={cn(strong && "font-medium")}>{label}</dt>
+      <dd className={cn("tabular-nums", strong && "font-bold text-primary", negative && "text-red-600")}>
+        {formatCurrency(Math.abs(value))}
+      </dd>
     </div>
   );
 }
@@ -51,21 +105,56 @@ export default async function BuildingDetailPage(props: PageProps<"/buildings/[i
   });
   if (!building) notFound();
 
-  const paymentsAgg = await prisma.payment.aggregate({
-    where: { contract: { unit: { buildingId: building.id } } },
-    _sum: { paidAmount: true },
+  // Read row by row, not summed: the tax rate is on each payment's contract, and a total that
+  // has swallowed the tax cannot give it back.
+  const collections = await prisma.payment.findMany({
+    where: { contract: { unit: { buildingId: building.id } }, paidAmount: { gt: 0 } },
+    select: { paidAmount: true, recipient: true, contract: { select: { vatRate: true } } },
   });
-  const collected = paymentsAgg._sum.paidAmount ?? 0;
+  const collected = collections.reduce((sum, p) => sum + (p.paidAmount ?? 0), 0);
+  const vat = vatWithin(collections);
+  // Rent the owner took straight from the tenant: already in their hands, so it comes off what
+  // is still owed to them — while the commission on it stays due.
+  const collectedByOwner = collections
+    .filter((p) => p.recipient === "OWNER")
+    .reduce((sum, p) => sum + (p.paidAmount ?? 0), 0);
   const [expenses, operatorExpenses] = await Promise.all([
     ownerExpensesForBuilding(building.id),
     operatorExpensesForBuilding(building.id),
   ]);
-  const amounts = { collected, expenses };
-  const netRevenue = netCollected(amounts);
+  const amounts = { collected, expenses, vat };
 
   // The commission comes from the building's active management agreement — the signed terms.
   const terms = await commissionForBuilding(building.id);
+  const commissionBasis = commissionBase(amounts);
   const managementFeeAmount = terms ? commissionAmount(terms, amounts) : 0;
+
+  // A cancelled transfer never reached the owner, so it settles nothing.
+  const overdue = await prisma.payment.findMany({
+    where: {
+      contract: { unit: { buildingId: building.id } },
+      dueDate: { lte: new Date() },
+      status: { not: "PAID" },
+    },
+    select: { amount: true, paidAmount: true },
+  });
+  const arrears = overdue.reduce((sum, p) => sum + Math.max(0, p.amount - (p.paidAmount ?? 0)), 0);
+  const occupiedUnits = building.units.filter((u) => u.status === "OCCUPIED").length;
+
+  const remittedAgg = await prisma.ownerRemittance.aggregate({
+    where: { buildingId: building.id, cancelledAt: null },
+    _sum: { amount: true },
+  });
+  const remitted = remittedAgg._sum.amount ?? 0;
+  // What the property owes its owner: everything collected, less what they bear and what the
+  // office earns. The tax stays on this side — the owner is the one who remits it to the state.
+  // The money splits in two and the halves must add back to it: the operator's commission and
+  // the owner's share. The tax rides along inside the owner's share — it is theirs to hand over.
+  const divisible = collected - expenses;
+  const ownerShare = divisible - managementFeeAmount;
+  // Everything that has actually reached the owner, however it reached him.
+  const ownerReceived = collectedByOwner + remitted;
+  const ownerBalance = ownerShare - ownerReceived;
   // What the operator paid for itself comes off its own commission, not the owner's income.
   const netManagementFee = managementFeeAmount - operatorExpenses;
 
@@ -119,56 +208,72 @@ export default async function BuildingDetailPage(props: PageProps<"/buildings/[i
         )}
       </div>
 
-      <Card>
-        <CardContent className="grid grid-cols-2 gap-4 py-4 sm:grid-cols-3 lg:grid-cols-5">
-          <div>
-            <p className="text-xs text-muted-foreground">المحصّل</p>
-            <p className="text-sm font-medium tabular-nums">{formatCurrency(collected)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">المصروفات</p>
-            <p className="text-sm font-medium tabular-nums">{formatCurrency(expenses)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">صافي المحصّل</p>
-            <p className="text-sm font-medium tabular-nums">{formatCurrency(netRevenue)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">نسبة إدارة الأملاك</p>
+      {/* Five figures side by side looked equal and were not: they are one calculation, and laid
+          out as a row nobody could see that 212,255 × 7% is not the commission shown — the tax and
+          the expenses had come out in between. Read downward, each line explains the next, and the
+          reader can check the arithmetic instead of trusting it. */}
+      <Card className="gap-0 py-0">
+        <CardHeader className="flex flex-row items-center justify-between border-b py-3.5">
+          <CardTitle className="text-base">نظرة على العقار</CardTitle>
+          <div className="flex items-center gap-3">
+            <Link href={`/owners/${building.ownerId}/statement?building=${building.id}`} className="text-xs text-primary hover:underline">
+              كشف حساب المالك
+            </Link>
             {terms ? (
-              <p className="text-sm font-medium">
-                {terms.percent}% <span className="text-xs text-muted-foreground">{COMMISSION_BASIS_LABEL}</span>
-              </p>
+              <Link href={`/agreements/${terms.agreementId}`} className="text-xs text-primary hover:underline" dir="ltr">
+                {terms.agreementNumber}
+              </Link>
             ) : (
-              <p className="text-sm text-muted-foreground">لا توجد اتفاقية سارية</p>
-            )}
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">عمولة إدارة الأملاك</p>
-            {terms ? (
-              <>
-                <p className="text-sm font-bold text-primary">{formatCurrency(managementFeeAmount)}</p>
-                <Link href={`/agreements/${terms.agreementId}`} className="text-xs text-primary hover:underline" dir="ltr">
-                  {terms.agreementNumber}
-                </Link>
-              </>
-            ) : (
-              <Link href="/agreements/new" className="text-sm text-primary hover:underline">
+              <Link href="/agreements/new" className="text-xs text-primary hover:underline">
                 إنشاء اتفاقية
               </Link>
             )}
           </div>
-          {terms && (
-            <div>
-              <p className="text-xs text-muted-foreground">صافي عمولة الإدارة</p>
-              <p className={cn("text-sm font-bold tabular-nums", netManagementFee < 0 && "text-red-600")}>
-                {formatCurrency(netManagementFee)}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                بعد خصم {formatCurrency(operatorExpenses)} مصروفات على المشغل
-              </p>
-            </div>
-          )}
+        </CardHeader>
+
+        <CardContent className="grid grid-cols-2 gap-4 py-4 sm:grid-cols-3 lg:grid-cols-5">
+          {/* A glance, not a ledger: someone opening a property wants to know at once how full it
+              is, what it has produced, what is late, and where each side stands. The working — the
+              splits and deductions behind these figures — belongs in the owner's statement, and
+              this card links to it rather than repeating it. */}
+          <Tile label="الإشغال" value={`${occupiedUnits} من ${building.units.length}`}>
+            {building.units.length > 0 && `${Math.round((occupiedUnits / building.units.length) * 100)}% مؤجّرة`}
+          </Tile>
+
+          <Tile label="المحصّل منذ البداية" value={formatCurrency(collected)}>
+            {vat > 0 && `منها ضريبة ${formatCurrency(vat)}`}
+          </Tile>
+
+          <Tile
+            label="المتأخر"
+            value={formatCurrency(arrears)}
+            tone={arrears > 0 ? "text-red-600" : undefined}
+          >
+            حلّ موعده ولم يُحصَّل
+          </Tile>
+
+          {/* The headline is the figure that asks for an action — what is still owed to the owner —
+              and beneath it the two numbers it came from. Leading with his share instead was read
+              as money already transferred to him. */}
+          <Tile
+            label={ownerBalance < 0 ? "قُبض للمالك زيادة" : "باقٍ للمالك"}
+            value={formatCurrency(Math.abs(ownerBalance))}
+            tone={ownerBalance < 0 ? "text-red-600" : "text-emerald-700"}
+          >
+            نصيبه {formatCurrency(ownerShare)} · وصله {formatCurrency(ownerReceived)}
+          </Tile>
+
+          <Tile
+            label={terms ? (operatorExpenses > 0 ? "صافي دخل المشغل" : `عمولة الإدارة (${terms.percent}%)`) : "عمولة الإدارة"}
+            value={terms ? formatCurrency(operatorExpenses > 0 ? netManagementFee : managementFeeAmount) : "—"}
+            tone={netManagementFee < 0 ? "text-red-600" : undefined}
+          >
+            {terms
+              ? operatorExpenses > 0
+                ? `عمولة ${formatCurrency(managementFeeAmount)} · مصروفاته ${formatCurrency(operatorExpenses)}`
+                : "بلا مصروفات على المشغل"
+              : "لا اتفاقية إدارة سارية"}
+          </Tile>
         </CardContent>
       </Card>
 
