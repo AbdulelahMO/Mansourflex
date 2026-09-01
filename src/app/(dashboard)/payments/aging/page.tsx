@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PrintButton } from "@/components/contracts/print-button";
 import { AGING_BUCKETS, summarizeAging, type AgingItem } from "@/lib/aging";
-import { formatCurrencyPrecise } from "@/lib/format";
+import { formatCurrencyPrecise, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /** The older the money, the hotter the column — the shape of the debt read before the figures are. */
@@ -48,7 +48,8 @@ export default async function AgingPage(props: PageProps<"/payments/aging">) {
   // The whole of today counts as not yet late: an instalment due this morning is not a debt tonight.
   const dueThrough = new Date(asOf.getFullYear(), asOf.getMonth(), asOf.getDate(), 23, 59, 59, 999);
 
-  const [buildings, overdue] = await Promise.all([
+  const [org, buildings, overdue] = await Promise.all([
+    prisma.organizationSettings.findUnique({ where: { id: "default" }, select: { name: true, logoUrl: true } }),
     prisma.building.findMany({ where: scope, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.payment.findMany({
       where: {
@@ -95,6 +96,20 @@ export default async function AgingPage(props: PageProps<"/payments/aging">) {
         <PrintButton />
       </div>
 
+      {/* On screen the page is titled by the app around it; on paper it carries nothing at all —
+          a sheet of figures with no name, no date and no property it belongs to. */}
+      <div className="hidden space-y-1 border-b pb-3 text-center print:block">
+        {org?.logoUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={`/api/files/${org.logoUrl}`} alt="" className="mx-auto h-12 object-contain" />
+        )}
+        <h2 className="text-lg font-bold">تقادم الديون</h2>
+        <p className="text-xs text-muted-foreground">
+          {buildingId ? buildings.find((b) => b.id === buildingId)?.name : "كل العقارات"} · حتى{" "}
+          {formatDate(asOf)}
+        </p>
+      </div>
+
       <div className="print:hidden">
         <h1 className="text-2xl font-bold">تقادم الديون</h1>
         <p className="text-sm text-muted-foreground">
@@ -137,7 +152,7 @@ export default async function AgingPage(props: PageProps<"/payments/aging">) {
         </Card>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="print-keep grid grid-cols-2 gap-3 sm:grid-cols-4 print:grid-cols-4">
             {AGING_BUCKETS.map((b) => (
               <div key={b.key} className="rounded-lg border p-3">
                 <p className="text-xs text-muted-foreground">{b.label}</p>
@@ -199,7 +214,16 @@ export default async function AgingPage(props: PageProps<"/payments/aging">) {
                           </span>
                         </TableCell>
                         {AGING_BUCKETS.map((b) => (
-                          <TableCell key={b.key} className={cn("text-left tabular-nums", BUCKET_TONE[b.key])}>
+                          <TableCell
+                            key={b.key}
+                            className={cn(
+                              "text-left tabular-nums",
+                              BUCKET_TONE[b.key],
+                              // On a phone the row is a card; a bucket holding nothing is a line
+                              // of noise between the ones that matter.
+                              r.buckets[b.key] <= 0 && "cell-blank"
+                            )}
+                          >
                             {r.buckets[b.key] > 0 ? formatCurrencyPrecise(r.buckets[b.key]) : "—"}
                           </TableCell>
                         ))}

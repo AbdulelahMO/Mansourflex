@@ -149,6 +149,10 @@
   html,
   body {
     background: #fff;
+    /* A statement's meaning is partly in its colour — arrears in red, a totals row tinted. Printers
+       drop both by default, so the sheet handed over would lose what the screen shows. */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   .print-wide {
@@ -165,10 +169,26 @@
     font-size: 9.5pt;
   }
 
+  /* `print-doc` is the portrait counterpart: a document handed to one person — a tenant's
+     statement, a receipt — reads as a portrait sheet, and only the wide reports need landscape. */
+  .print-doc table {
+    width: 100%;
+    font-size: 10pt;
+  }
+
   .print-wide th,
-  .print-wide td {
+  .print-wide td,
+  .print-doc th,
+  .print-doc td {
     padding-block: 4px !important;
     padding-inline: 6px !important;
+  }
+
+  /* A block of figures or a document's head must not be torn across two sheets. */
+  .print-doc dl,
+  .print-wide dl,
+  .print-keep {
+    break-inside: avoid;
   }
 
   /* Column headers repeat when a long statement runs over several sheets. */
@@ -250,6 +270,14 @@
     color: var(--muted-foreground);
     font-size: 0.75rem;
     font-weight: 500;
+  }
+
+  /* A cell holding nothing to say. On a phone the row is a card read downward, and «مسدَّد —»
+     is a line of noise between the lines that carry money; the table keeps the cell for its
+     columns' sake, and the card drops it. Written as a rule of its own because the utility
+     class loses to `table[data-stacked] td` on specificity. */
+  table[data-stacked] td.cell-blank {
+    display: none;
   }
 
   /* An empty caption would still push the value off-centre. */

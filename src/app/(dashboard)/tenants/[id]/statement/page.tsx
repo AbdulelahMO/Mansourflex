@@ -155,7 +155,7 @@ export default async function TenantStatementPage(props: PageProps<"/tenants/[id
       : vatNote;
 
   return (
-    <div className="print-wide space-y-4">
+    <div className="print-doc space-y-4">
       <div className="flex items-center justify-between print:hidden">
         <Link href="/tenants" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
           <ChevronRight className="size-4" />
@@ -243,7 +243,7 @@ export default async function TenantStatementPage(props: PageProps<"/tenants/[id
 
             {/* Who, which property, and over what term — laid out as labelled facts rather than
                 one run-on line, since this is the part a reader checks before the figures. */}
-            <dl className="grid gap-x-6 gap-y-3 rounded-lg border bg-muted/30 p-4 sm:grid-cols-3 lg:grid-cols-4">
+            <dl className="grid gap-x-6 gap-y-3 rounded-lg border bg-muted/30 p-4 sm:grid-cols-3 lg:grid-cols-4 print:grid-cols-3">
               <Field label="المستأجر" value={tenant.name} />
               <Field label="رقم الهوية" value={tenant.nationalId} />
               <Field label="الجوال" value={tenant.phone} />
@@ -269,7 +269,7 @@ export default async function TenantStatementPage(props: PageProps<"/tenants/[id
             </dl>
           </header>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="print-keep grid grid-cols-2 gap-3 sm:grid-cols-4 print:grid-cols-4">
             <Figure
               label={owed >= 0 ? "الرصيد المستحق عليه" : "رصيد له (مدفوع مقدماً)"}
               value={formatCurrencyPrecise(Math.abs(owed))}
@@ -304,9 +304,9 @@ export default async function TenantStatementPage(props: PageProps<"/tenants/[id
                   <TableRow className="bg-muted/40">
                     <TableCell>{formatDate(from)}</TableCell>
                     <TableCell className="font-medium">رصيد ما قبل الفترة</TableCell>
-                    <TableCell>—</TableCell>
-                    <TableCell className="text-left">—</TableCell>
-                    <TableCell className="text-left">—</TableCell>
+                    <TableCell className="cell-blank">—</TableCell>
+                    <TableCell className="text-left cell-blank">—</TableCell>
+                    <TableCell className="text-left cell-blank">—</TableCell>
                     <TableCell className="text-left font-medium tabular-nums">
                       {formatCurrencyPrecise(statement.opening)}
                     </TableCell>
@@ -323,13 +323,16 @@ export default async function TenantStatementPage(props: PageProps<"/tenants/[id
                         <span className="block text-xs text-amber-700">يلزم إصدار سند قبض له</span>
                       )}
                     </TableCell>
-                    <TableCell dir="ltr" className="text-right text-muted-foreground">
+                    <TableCell
+                      dir="ltr"
+                      className={cn("text-right text-muted-foreground", !l.reference && "cell-blank")}
+                    >
                       {l.reference ?? "—"}
                     </TableCell>
-                    <TableCell className="text-left tabular-nums">
+                    <TableCell className={cn("text-left tabular-nums", l.kind !== "CHARGE" && "cell-blank")}>
                       {l.kind === "CHARGE" ? formatCurrencyPrecise(l.amount) : "—"}
                     </TableCell>
-                    <TableCell className="text-left tabular-nums">
+                    <TableCell className={cn("text-left tabular-nums", l.kind !== "CREDIT" && "cell-blank")}>
                       {l.kind === "CREDIT" ? formatCurrencyPrecise(l.amount) : "—"}
                     </TableCell>
                     <TableCell
