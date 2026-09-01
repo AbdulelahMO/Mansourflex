@@ -148,11 +148,34 @@
 @media print {
   html,
   body {
-    background: #fff;
     /* A statement's meaning is partly in its colour — arrears in red, a totals row tinted. Printers
-       drop both by default, so the sheet handed over would lose what the screen shows. */
+       drop both by default, so the sheet handed over would lose what the screen shows. But telling
+       the printer to honour colour also hands it the application's own cream ground, which then
+       floods the whole sheet; the page is paper, so it is forced back to white by name. */
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+    background: #fff !important;
+    /* The sheet's edges are the @page margins and nothing else: a stray width or padding here
+       pushes the document past one of them and the border comes out of the printer clipped. */
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* On screen a document sits on a card that separates it from the application around it. On paper
+     there is nothing around it, so the card's frame is a second border inside the page's own — and
+     the one that gets clipped when anything runs wide. The page itself is the frame. */
+  [data-slot="card"] {
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .print-doc,
+  .print-wide {
+    width: auto !important;
+    max-width: 100% !important;
   }
 
   .print-wide {
@@ -182,6 +205,10 @@
   .print-doc td {
     padding-block: 4px !important;
     padding-inline: 6px !important;
+    /* A cell that refuses to wrap widens the table until the sheet cannot hold it. On paper
+       there is nowhere to scroll, so a long value wraps instead of pushing the page open. */
+    white-space: normal !important;
+    overflow-wrap: anywhere;
   }
 
   /* A block of figures or a document's head must not be torn across two sheets. */
