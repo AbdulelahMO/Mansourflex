@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PrintButton } from "@/components/contracts/print-button";
 import { contractStatement } from "@/lib/tenant-statement";
+import { annualRent } from "@/lib/rent-value";
 import { formatCurrencyPrecise, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -32,17 +33,34 @@ function Figure({ label, value, tone }: { label: string; value: string; tone?: s
  * butting against Latin digits lets the bidi algorithm run them together, and «هوية 1188179739»
  * beside «جوال 0581939603» came out as a single 21-digit number.
  */
-function Field({ label, value }: { label: string; value: string | null | undefined }) {
+function Field({
+  label,
+  value,
+  note,
+}: {
+  label: string;
+  value: string | null | undefined;
+  note?: string | null;
+}) {
   if (!value) return null;
   return (
     <div className="min-w-0">
       <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="truncate text-sm font-medium">
+      <dd className="text-sm font-medium">
         <bdi>{value}</bdi>
       </dd>
+      {note && <p className="text-xs text-muted-foreground">{note}</p>}
     </div>
   );
 }
+
+const FREQUENCY_LABELS: Record<string, string> = {
+  MONTHLY: "شهرية",
+  QUARTERLY: "ربع سنوية",
+  SEMI_ANNUAL: "نصف سنوية",
+  ANNUAL: "سنوية",
+  ONE_TIME: "دفعة واحدة",
+};
 
 /**
  * The tenant's account on one contract, as a running ledger.
@@ -75,6 +93,11 @@ export default async function TenantStatementPage(props: PageProps<"/tenants/[id
           status: true,
           startDate: true,
           endDate: true,
+          rentAmount: true,
+          amountType: true,
+          increasePercent: true,
+          vatRate: true,
+          paymentFrequency: true,
           unit: { select: { unitNumber: true, building: { select: { name: true } } } },
         },
       },
@@ -120,6 +143,16 @@ export default async function TenantStatementPage(props: PageProps<"/tenants/[id
   ]);
 
   const owed = statement.totals.balance;
+
+  // The lease's yearly rent is worked out, never copied: `rentAmount` means a year, a whole term,
+  // or a first year, depending on how the contract was entered.
+  const yearly = annualRent(selected, closing);
+  const vatNote =
+    selected.vatRate > 0 ? `غير شامل ضريبة ${selected.vatRate}%` : "غير خاضع لضريبة القيمة المضافة";
+  const risingNote =
+    selected.amountType === "INCREASING"
+      ? `السنة ${yearly.yearIndex} — متزايد ${selected.increasePercent ?? 0}% سنوياً · ${vatNote}`
+      : vatNote;
 
   return (
     <div className="print-wide space-y-4">
@@ -210,7 +243,7 @@ export default async function TenantStatementPage(props: PageProps<"/tenants/[id
 
             {/* Who, which property, and over what term — laid out as labelled facts rather than
                 one run-on line, since this is the part a reader checks before the figures. */}
-            <dl className="grid gap-x-6 gap-y-3 rounded-lg border bg-muted/30 p-4 sm:grid-cols-3">
+            <dl className="grid gap-x-6 gap-y-3 rounded-lg border bg-muted/30 p-4 sm:grid-cols-3 lg:grid-cols-4">
               <Field label="المستأجر" value={tenant.name} />
               <Field label="رقم الهوية" value={tenant.nationalId} />
               <Field label="الجوال" value={tenant.phone} />
@@ -222,6 +255,16 @@ export default async function TenantStatementPage(props: PageProps<"/tenants/[id
               <Field
                 label="مدة العقد"
                 value={`${formatDate(selected.startDate)} — ${formatDate(selected.endDate)}`}
+              />
+              <Field label="الإيجار السنوي" value={formatCurrencyPrecise(yearly.amount)} note={risingNote} />
+              <Field
+                label="القسط ودوريته"
+                value={
+                  summary.instalment === null
+                    ? "—"
+                    : `${formatCurrencyPrecise(summary.instalment)} · ${FREQUENCY_LABELS[selected.paymentFrequency] ?? ""}`
+                }
+                note={selected.vatRate > 0 ? "شامل الضريبة — وهو ما يظهر في الجدول أدناه" : "وهو ما يظهر في الجدول أدناه"}
               />
             </dl>
           </header>
@@ -325,12 +368,11 @@ export default async function TenantStatementPage(props: PageProps<"/tenants/[id
             </p>
           )}
 
+          {/* What a reader cannot infer from the columns themselves — a negative figure, and the
+              absence of everything not yet due. The rest was explanation the page does not need. */}
           <p className="text-xs leading-6 text-muted-foreground">
-            «مستحق عليه» قسط حلّ موعده بموجب العقد فصار ديناً — تاريخه تاريخ استحقاقه ومستنده الفاتورة.
-            و«مسدَّد» مبلغ قبضه المكتب فعلاً — تاريخه تاريخ إصدار سنده ومستنده رقم السند. ولا يتقابل الاثنان
-            سطراً بسطر: للقسط الواحد قد تصدر عدة سندات، وقد يُدفع مبلغ قبل أن يحلّ موعد قسطه. و«الرصيد» بعد كل سطر هو ما كان
-            على المستأجر في ذلك التاريخ — بالسالب يعني أنه سدّد مقدماً. ولا يُدرج في الكشف قسط لم
-            يحن موعده — الكشف بيان حساب حتى تاريخ إصداره لا جدول سداد، وجدول أقساط العقد كاملاً في صفحة العقد.
+            الرصيد بالسالب يعني سداداً مقدماً · الكشف حتى تاريخ إصداره ولا يشمل أقساطاً لم يحن موعدها —
+            جدول أقساط العقد كاملاً في العقد.
           </p>
 
           <div className="hidden justify-between pt-10 text-xs print:flex">

@@ -21,6 +21,7 @@ import {
   Settings,
   DatabaseBackup,
   Upload,
+  Hourglass,
   type LucideIcon,
 } from "lucide-react";
 
@@ -47,6 +48,7 @@ export const navItems: NavItem[] = [
   { href: "/tenants", label: "المستأجرين", icon: UserRound, permission: "tenants.view" },
   { href: "/contracts", label: "العقود", icon: FileText, permission: "contracts.view" },
   { href: "/payments", label: "التحصيل", icon: Wallet, permission: "payments.view" },
+  { href: "/payments/aging", label: "تقادم الديون", icon: Hourglass, permission: "payments.view" },
   { href: "/expenses", label: "المصروفات", icon: ReceiptText, permission: "expenses.view" },
   { href: "/documents", label: "المستندات المالية", icon: FileSpreadsheet, permission: "documents.view" },
   { href: "/approvals", label: "طلبات الموافقة", icon: ShieldCheck, staffOnly: true },
@@ -111,7 +113,7 @@ export const navEntries: NavEntry[] = [
       key: "finance",
       label: "المالية",
       icon: Wallet2,
-      items: [item("/payments"), item("/expenses"), item("/documents")],
+      items: [item("/payments"), item("/payments/aging"), item("/expenses"), item("/documents")],
     },
   },
   { type: "item", item: item("/notifications") },

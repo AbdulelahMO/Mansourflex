@@ -5,6 +5,8 @@ import { buildStatement, type Movement, type Period, type Statement } from "@/li
 export type StatementSummary = {
   /** Instalments already due and still short — the figure a collector acts on. */
   arrears: number;
+  /** The instalment the lease is on today, VAT included — what the ledger's charges look like. */
+  instalment: number | null;
   deposit: { held: number; applied: number; available: number };
   /** Collected but with no receipt behind it — should be zero, and is named when it is not. */
   unvouched: number;
@@ -99,10 +101,14 @@ export async function contractStatement(
   const held = contract?.depositAmount ?? 0;
   const applied = contract?.depositApplied ?? 0;
 
+  // The instalment currently running: the last one to have fallen due, or the first if none has.
+  const current = [...payments].reverse().find((p) => p.dueDate <= now) ?? payments[0];
+
   return {
     statement: buildStatement(movements, period),
     summary: {
       arrears,
+      instalment: current ? current.amount : null,
       deposit: { held, applied, available: Math.max(0, round2(held - applied)) },
       unvouched,
     },
