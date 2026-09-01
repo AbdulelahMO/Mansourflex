@@ -10,6 +10,7 @@ import { amountToArabicWords } from "@/lib/number-to-arabic-words";
 import { PrintButton } from "@/components/contracts/print-button";
 import { ExpenseVoucherDocument } from "@/components/expenses/expense-voucher-document";
 import { RemittanceDocument } from "@/components/owners/remittance-document";
+import { CommissionReceiptDocument } from "@/components/owners/commission-receipt-document";
 
 const DOCUMENT_TYPE_LABELS: Record<string, { ar: string; en: string }> = {
   INVOICE: { ar: "فاتورة", en: "Invoice" },
@@ -62,6 +63,15 @@ export default async function FinancialDocumentPage(props: PageProps<"/documents
   if (remittanceDoc?.remittance) {
     const org = await prisma.organizationSettings.findUnique({ where: { id: "default" } });
     return <RemittanceDocument doc={{ ...remittanceDoc, remittance: remittanceDoc.remittance }} org={org} />;
+  }
+
+  const commissionDoc = await prisma.financialDocument.findFirst({
+    where: { id, type: "COMMISSION_RECEIPT", commission: { building: scope } },
+    include: { commission: { include: { owner: true, building: true } } },
+  });
+  if (commissionDoc?.commission) {
+    const org = await prisma.organizationSettings.findUnique({ where: { id: "default" } });
+    return <CommissionReceiptDocument doc={{ ...commissionDoc, commission: commissionDoc.commission }} org={org} />;
   }
 
   const doc = await prisma.financialDocument.findFirst({

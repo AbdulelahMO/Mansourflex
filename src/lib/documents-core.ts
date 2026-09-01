@@ -17,13 +17,14 @@ export function round2(n: number) {
  * not from the row count, which would reuse a number after any document is deleted and
  * collide with the `documentNumber` unique constraint.
  */
-export type DocumentKind = "INVOICE" | "RECEIPT" | "PAYMENT_VOUCHER" | "OWNER_REMITTANCE";
+export type DocumentKind = "INVOICE" | "RECEIPT" | "PAYMENT_VOUCHER" | "OWNER_REMITTANCE" | "COMMISSION_RECEIPT";
 
 const NUMBER_PREFIX: Record<DocumentKind, string> = {
   INVOICE: "INV",
   RECEIPT: "RCT",
   PAYMENT_VOUCHER: "PV",
   OWNER_REMITTANCE: "REM",
+  COMMISSION_RECEIPT: "COM",
 };
 
 export async function nextDocumentNumber(type: DocumentKind, db: Db = prisma) {

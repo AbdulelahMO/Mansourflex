@@ -14,7 +14,8 @@ import { BulkUnitsDialog } from "@/components/units/bulk-units-dialog";
 import { DeleteButton } from "@/components/delete-button";
 import { deleteUnit } from "@/lib/actions/units";
 import { deleteBuilding } from "@/lib/actions/buildings";
-import { commissionForBuilding, commissionAmount, commissionBase, vatWithin } from "@/lib/commission";
+import { buildingCommissionAccount } from "@/lib/commission-standing";
+import { CommissionDialog } from "@/components/owners/commission-dialog";
 import { ownerExpensesForBuilding, operatorExpensesForBuilding } from "@/lib/expenses";
 import { cn } from "@/lib/utils";
 import { BuildingLocationMap } from "@/components/buildings/building-location-map";
@@ -105,31 +106,14 @@ export default async function BuildingDetailPage(props: PageProps<"/buildings/[i
   });
   if (!building) notFound();
 
-  // Read row by row, not summed: the tax rate is on each payment's contract, and a total that
-  // has swallowed the tax cannot give it back.
-  const collections = await prisma.payment.findMany({
-    where: { contract: { unit: { buildingId: building.id } }, paidAmount: { gt: 0 } },
-    select: { paidAmount: true, recipient: true, contract: { select: { vatRate: true } } },
-  });
-  const collected = collections.reduce((sum, p) => sum + (p.paidAmount ?? 0), 0);
-  const vat = vatWithin(collections);
-  // Rent the owner took straight from the tenant: already in their hands, so it comes off what
-  // is still owed to them — while the commission on it stays due.
-  const collectedByOwner = collections
-    .filter((p) => p.recipient === "OWNER")
-    .reduce((sum, p) => sum + (p.paidAmount ?? 0), 0);
-  const [expenses, operatorExpenses] = await Promise.all([
-    ownerExpensesForBuilding(building.id),
-    operatorExpensesForBuilding(building.id),
-  ]);
-  const amounts = { collected, expenses, vat };
+  // Every figure on the card comes from one place, so the property page and the owner's statement
+  // can never drift apart on what the fee is or what is left of it.
+  const standing = await buildingCommissionAccount(building.id);
+  const { collected, vat, collectedByOwner, expenses, remitted } = standing;
+  const managementFeeAmount = standing.earned;
+  const operatorExpenses = await operatorExpensesForBuilding(building.id);
+  const netManagementFee = managementFeeAmount - operatorExpenses;
 
-  // The commission comes from the building's active management agreement — the signed terms.
-  const terms = await commissionForBuilding(building.id);
-  const commissionBasis = commissionBase(amounts);
-  const managementFeeAmount = terms ? commissionAmount(terms, amounts) : 0;
-
-  // A cancelled transfer never reached the owner, so it settles nothing.
   const overdue = await prisma.payment.findMany({
     where: {
       contract: { unit: { buildingId: building.id } },
@@ -141,22 +125,11 @@ export default async function BuildingDetailPage(props: PageProps<"/buildings/[i
   const arrears = overdue.reduce((sum, p) => sum + Math.max(0, p.amount - (p.paidAmount ?? 0)), 0);
   const occupiedUnits = building.units.filter((u) => u.status === "OCCUPIED").length;
 
-  const remittedAgg = await prisma.ownerRemittance.aggregate({
-    where: { buildingId: building.id, cancelledAt: null },
-    _sum: { amount: true },
-  });
-  const remitted = remittedAgg._sum.amount ?? 0;
-  // What the property owes its owner: everything collected, less what they bear and what the
-  // office earns. The tax stays on this side — the owner is the one who remits it to the state.
-  // The money splits in two and the halves must add back to it: the operator's commission and
-  // the owner's share. The tax rides along inside the owner's share — it is theirs to hand over.
   const divisible = collected - expenses;
   const ownerShare = divisible - managementFeeAmount;
   // Everything that has actually reached the owner, however it reached him.
   const ownerReceived = collectedByOwner + remitted;
   const ownerBalance = ownerShare - ownerReceived;
-  // What the operator paid for itself comes off its own commission, not the owner's income.
-  const netManagementFee = managementFeeAmount - operatorExpenses;
 
   return (
     <div className="space-y-4">
@@ -216,12 +189,22 @@ export default async function BuildingDetailPage(props: PageProps<"/buildings/[i
         <CardHeader className="flex flex-row items-center justify-between border-b py-3.5">
           <CardTitle className="text-base">نظرة على العقار</CardTitle>
           <div className="flex items-center gap-3">
+            {/* Shown whether anything is owed or not: a control that appears only in a rare case is
+                a control nobody can find when the case arrives. */}
+            {canManage && (
+              <CommissionDialog
+                buildingId={building.id}
+                buildingName={building.name}
+                dueAmount={standing.dueFromOwner}
+                triggerLabel="قبض أتعاب"
+              />
+            )}
             <Link href={`/owners/${building.ownerId}/statement?building=${building.id}`} className="text-xs text-primary hover:underline">
               كشف حساب المالك
             </Link>
-            {terms ? (
-              <Link href={`/agreements/${terms.agreementId}`} className="text-xs text-primary hover:underline" dir="ltr">
-                {terms.agreementNumber}
+            {standing.agreement ? (
+              <Link href={`/agreements/${standing.agreement.id}`} className="text-xs text-primary hover:underline" dir="ltr">
+                {standing.agreement.number}
               </Link>
             ) : (
               <Link href="/agreements/new" className="text-xs text-primary hover:underline">
@@ -264,15 +247,17 @@ export default async function BuildingDetailPage(props: PageProps<"/buildings/[i
           </Tile>
 
           <Tile
-            label={terms ? (operatorExpenses > 0 ? "صافي دخل المشغل" : `عمولة الإدارة (${terms.percent}%)`) : "عمولة الإدارة"}
-            value={terms ? formatCurrency(operatorExpenses > 0 ? netManagementFee : managementFeeAmount) : "—"}
+            label={standing.percent > 0 ? (operatorExpenses > 0 ? "صافي دخل المشغل" : `عمولة الإدارة (${standing.percent}%)`) : "عمولة الإدارة"}
+            value={standing.percent > 0 ? formatCurrency(operatorExpenses > 0 ? netManagementFee : managementFeeAmount) : "—"}
             tone={netManagementFee < 0 ? "text-red-600" : undefined}
           >
-            {terms
-              ? operatorExpenses > 0
-                ? `عمولة ${formatCurrency(managementFeeAmount)} · مصروفاته ${formatCurrency(operatorExpenses)}`
-                : "بلا مصروفات على المشغل"
-              : "لا اتفاقية إدارة سارية"}
+            {standing.percent === 0
+              ? "لا اتفاقية إدارة سارية"
+              : standing.dueFromOwner > 0.5
+                ? `مطلوب من المالك ${formatCurrency(standing.dueFromOwner)}`
+                : operatorExpenses > 0
+                  ? `عمولة ${formatCurrency(managementFeeAmount)} · مصروفاته ${formatCurrency(operatorExpenses)}`
+                  : "مخصومة من التحصيل بالكامل"}
           </Tile>
         </CardContent>
       </Card>

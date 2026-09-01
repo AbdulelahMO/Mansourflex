@@ -124,6 +124,7 @@ model User {
   documentsIssued    FinancialDocument[] @relation("DocumentIssuer")
   documentsCancelled FinancialDocument[] @relation("DocumentCanceller")
   remittancesCreated OwnerRemittance[]   @relation("RemittanceCreator")
+  commissionsCreated CommissionCollection[] @relation("CommissionCreator")
   paymentsCollected  Payment[]           @relation("PaymentCollector")
   auditLogs         AuditLog[]
 
@@ -154,6 +155,7 @@ model Owner {
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   remittances OwnerRemittance[] // ما وُرِّد له من مستحقاته
+  commissionPayments CommissionCollection[] // ما قبضه المشغل منه من أتعاب
   buildings  Building[]
   agreements ManagementAgreement[]
 
@@ -213,6 +215,7 @@ model Building {
   units     Unit[]
   contacts  BuildingContact[]
   remittances OwnerRemittance[] // توريدات مستحقات المالك عن هذا المبنى
+  commissionPayments CommissionCollection[] // ما قُبض من المالك من أتعاب هذا المبنى
   /// عقار انتهت إدارته: يختفي من القوائم العاملة وتبقى سجلاته كاملة
   archivedAt DateTime?
 
@@ -524,6 +527,7 @@ enum DocumentType {
   RECEIPT // سند قبض
   PAYMENT_VOUCHER // سند صرف — يصدر عند سداد مصروف
   OWNER_REMITTANCE // سند توريد — يصدر عند تحويل مستحقات المالك إليه
+  COMMISSION_RECEIPT // سند قبض عمولة — أتعاب الإدارة تُقبض من المالك
 }
 
 enum DocumentStatus {
@@ -565,6 +569,9 @@ model FinancialDocument {
 
   remittanceId String?
   remittance   OwnerRemittance? @relation(fields: [remittanceId], references: [id], onDelete: Cascade)
+
+  commissionId String?
+  commission   CommissionCollection? @relation(fields: [commissionId], references: [id], onDelete: Cascade)
 
   @@map("financial_documents")
 }
@@ -658,6 +665,34 @@ model BuildingPhoto {
 }
 
 /// سند توريد — ما حُوِّل فعلاً للمالك من مستحقاته عن مبنى بعينه
+/// قبض أتعاب الإدارة من المالك — حين يستلم الإيجار بنفسه فلا يمرّ بالمشغل ما يُخصم منه
+model CommissionCollection {
+  id          String   @id @default(cuid())
+  amount      Float
+  collectedAt DateTime // تاريخ استلام العمولة
+  method      String? // تحويل بنكي، نقدي، شيك
+  reference   String? // رقم العملية أو الشيك
+  notes       String?
+
+  /// سند أُلغي: يعود مبلغه ديناً على المالك ويبقى السند برقمه مختوماً بـ«ملغى»
+  cancelledAt DateTime?
+
+  ownerId String
+  owner   Owner  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  buildingId String
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  createdById String?
+  createdBy   User?   @relation("CommissionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  documents FinancialDocument[]
+
+  createdAt DateTime @default(now())
+
+  @@map("commission_collections")
+}
+
 model OwnerRemittance {
   id         String   @id @default(cuid())
   amount     Float

@@ -18,6 +18,7 @@ const TYPE_TABS = [
   { key: "RECEIPT", label: "سندات القبض" },
   { key: "PAYMENT_VOUCHER", label: "سندات الصرف" },
   { key: "OWNER_REMITTANCE", label: "سندات التوريد" },
+  { key: "COMMISSION_RECEIPT", label: "سندات قبض العمولة" },
 ];
 
 const TYPE_LABELS: Record<string, string> = {
@@ -25,6 +26,7 @@ const TYPE_LABELS: Record<string, string> = {
   RECEIPT: "سند قبض",
   PAYMENT_VOUCHER: "سند صرف",
   OWNER_REMITTANCE: "سند توريد",
+  COMMISSION_RECEIPT: "سند قبض عمولة",
 };
 
 /** Reads a month written as 2026-06 or 06/2026 into the range of days it covers. */
@@ -49,6 +51,7 @@ const TYPE_TONES: Record<string, string> = {
   RECEIPT: "bg-emerald-100 text-emerald-700",
   PAYMENT_VOUCHER: "bg-amber-100 text-amber-700",
   OWNER_REMITTANCE: "bg-violet-100 text-violet-700",
+  COMMISSION_RECEIPT: "bg-teal-100 text-teal-700",
 };
 
 export default async function FinancialDocumentsPage(props: PageProps<"/documents">) {
@@ -76,8 +79,9 @@ export default async function FinancialDocumentsPage(props: PageProps<"/document
       { contract: { unit: { building: scope } } },
       { expense: { building: scope } },
       { remittance: { building: scope } },
+      { commission: { building: scope } },
     ],
-    ...(type !== "all" ? { type: type as "INVOICE" | "RECEIPT" | "PAYMENT_VOUCHER" | "OWNER_REMITTANCE" } : {}),
+    ...(type !== "all" ? { type: type as "INVOICE" | "RECEIPT" | "PAYMENT_VOUCHER" | "OWNER_REMITTANCE" | "COMMISSION_RECEIPT" } : {}),
     ...(q
       ? {
           AND: [
@@ -91,6 +95,8 @@ export default async function FinancialDocumentsPage(props: PageProps<"/document
                 { expense: { building: { name: { contains: q } } } },
                 { remittance: { owner: { name: { contains: q } } } },
                 { remittance: { building: { name: { contains: q } } } },
+                { commission: { owner: { name: { contains: q } } } },
+                { commission: { building: { name: { contains: q } } } },
                 ...(month ? [{ payment: { dueDate: { gte: month.from, lte: month.to } } }] : []),
               ],
             },
@@ -118,6 +124,7 @@ export default async function FinancialDocumentsPage(props: PageProps<"/document
         },
         expense: { select: { description: true, vendor: true, building: { select: { name: true } } } },
         remittance: { select: { owner: { select: { name: true } }, building: { select: { name: true } } } },
+        commission: { select: { owner: { select: { name: true } }, building: { select: { name: true } } } },
         issuedBy: { select: { name: true } },
       },
       orderBy: [{ issueDate: "desc" }, { documentNumber: "desc" }],
@@ -277,6 +284,11 @@ export default async function FinancialDocumentsPage(props: PageProps<"/document
                             <>
                               <span className="font-medium">توريد للمالك {d.remittance.owner.name}</span>
                               <span className="block text-xs text-muted-foreground">{d.remittance.building.name}</span>
+                            </>
+                          ) : d.commission ? (
+                            <>
+                              <span className="font-medium">أتعاب من المالك {d.commission.owner.name}</span>
+                              <span className="block text-xs text-muted-foreground">{d.commission.building.name}</span>
                             </>
                           ) : d.expense ? (
                             <>

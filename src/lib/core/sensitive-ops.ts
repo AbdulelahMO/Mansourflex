@@ -199,6 +199,10 @@ export const SENSITIVE_OPS: Record<string, SensitiveOp<never>> = {
         ...(doc.type === "OWNER_REMITTANCE" && doc.remittanceId
           ? [prisma.ownerRemittance.update({ where: { id: doc.remittanceId }, data: { cancelledAt: now } })]
           : []),
+        // A cancelled fee receipt means the fee was never received, so it goes back to being owed.
+        ...(doc.type === "COMMISSION_RECEIPT" && doc.commissionId
+          ? [prisma.commissionCollection.update({ where: { id: doc.commissionId }, data: { cancelledAt: now } })]
+          : []),
       ]);
 
       if (doc.remittanceId) {
@@ -207,6 +211,17 @@ export const SENSITIVE_OPS: Record<string, SensitiveOp<never>> = {
           select: { ownerId: true },
         });
         if (remittance) revalidatePath(`/owners/${remittance.ownerId}`);
+      }
+
+      if (doc.commissionId) {
+        const collection = await prisma.commissionCollection.findUnique({
+          where: { id: doc.commissionId },
+          select: { ownerId: true, buildingId: true },
+        });
+        if (collection) {
+          revalidatePath(`/owners/${collection.ownerId}`);
+          revalidatePath(`/buildings/${collection.buildingId}`);
+        }
       }
 
       if (doc.contractId) revalidatePath(`/contracts/${doc.contractId}`);

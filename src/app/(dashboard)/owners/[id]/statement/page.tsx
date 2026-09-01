@@ -9,7 +9,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PrintButton } from "@/components/contracts/print-button";
 import { DeleteButton } from "@/components/delete-button";
 import { RemittanceDialog } from "@/components/owners/remittance-dialog";
+import { CommissionDialog } from "@/components/owners/commission-dialog";
+import { buildingCommissionAccount } from "@/lib/commission-standing";
 import { cancelRemittance } from "@/lib/actions/remittances";
+import { cancelCommissionCollection } from "@/lib/actions/commission";
 import { CancelDocumentButton } from "@/components/documents/cancel-document-button";
 import { ownerAccount } from "@/lib/owner-account";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -79,6 +82,27 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
   const building = buildings.find((b) => b.id === requestedBuilding) ?? null;
 
   const { lines, totals } = await ownerAccount(id, { from, to }, building?.id);
+
+  // Sitting with the owner is one errand: hand over what is his, take what is owed. So the fee's
+  // standing travels with each property's line, and both vouchers are issued from the same row.
+  const standings = new Map(
+    await Promise.all(
+      lines.map(async (l) => [l.buildingId, await buildingCommissionAccount(l.buildingId)] as const)
+    )
+  );
+
+  // Fees received back from the owner belong on their statement beside the transfers out: both
+  // are money that moved between the two parties, and a statement that shows one and not the
+  // other leaves the owner wondering what the missing amount was.
+  const commissionReceipts = await prisma.commissionCollection.findMany({
+    where: { ownerId: id, ...(building ? { buildingId: building.id } : {}), collectedAt: { gte: from, lte: to } },
+    include: {
+      building: { select: { name: true } },
+      documents: { select: { id: true, documentNumber: true } },
+      createdBy: { select: { name: true } },
+    },
+    orderBy: { collectedAt: "desc" },
+  });
 
   const remittances = await prisma.ownerRemittance.findMany({
     // The transfers must narrow with the account they settle: transfers for other properties
@@ -271,11 +295,19 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
                       {formatCurrency(l.balance)}
                     </TableCell>
                     <TableCell className="print:hidden">
-                      <RemittanceDialog
-                        buildingId={l.buildingId}
-                        buildingName={l.buildingName}
-                        suggestedAmount={l.balance}
-                      />
+                      <div className="flex flex-wrap items-center gap-1">
+                        <RemittanceDialog
+                          buildingId={l.buildingId}
+                          buildingName={l.buildingName}
+                          suggestedAmount={l.balance}
+                        />
+                        <CommissionDialog
+                          buildingId={l.buildingId}
+                          buildingName={l.buildingName}
+                          dueAmount={standings.get(l.buildingId)?.dueFromOwner ?? 0}
+                          triggerLabel="قبض أتعاب"
+                        />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -331,6 +363,72 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
           </p>
         </CardContent>
       </Card>
+
+      {commissionReceipts.length > 0 && (
+        <Card className="gap-0 py-0 print:hidden">
+          <CardHeader className="border-b py-3.5">
+            <CardTitle className="text-base">
+              أتعاب إدارة قُبضت من المالك ({commissionReceipts.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>رقم السند</TableHead>
+                    <TableHead>التاريخ</TableHead>
+                    <TableHead>العقار</TableHead>
+                    <TableHead>الطريقة</TableHead>
+                    <TableHead>المرجع</TableHead>
+                    <TableHead className="text-left">المبلغ</TableHead>
+                    <TableHead>سجّله</TableHead>
+                    <TableHead>خيارات</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {commissionReceipts.map((c) => (
+                    <TableRow key={c.id}>
+                      <TableCell dir="ltr" className="font-medium">
+                        {c.cancelledAt && (
+                          <span className="me-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                            ملغى
+                          </span>
+                        )}
+                        {c.documents[0] ? (
+                          <Link href={`/documents/${c.documents[0].id}`} className="hover:underline">
+                            {c.documents[0].documentNumber}
+                          </Link>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
+                      <TableCell>{formatDate(c.collectedAt)}</TableCell>
+                      <TableCell>{c.building.name}</TableCell>
+                      <TableCell>{c.method ?? "—"}</TableCell>
+                      <TableCell dir="ltr">{c.reference ?? "—"}</TableCell>
+                      <TableCell
+                        className={cn("text-left tabular-nums", c.cancelledAt && "text-muted-foreground line-through")}
+                      >
+                        {formatCurrency(c.amount)}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{c.createdBy?.name ?? "—"}</TableCell>
+                      <TableCell>
+                        <CancelDocumentButton
+                          documentNumber={c.documents[0]?.documentNumber ?? ""}
+                          cancelled={!!c.cancelledAt}
+                          action={cancelCommissionCollection.bind(null, c.id)}
+                          description="يُلغى السند وتعود الأتعاب ديناً على المالك، ويبقى السند برقمه مختوماً بـ«ملغى»."
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="gap-0 py-0 print:hidden">
         <CardHeader className="border-b py-3.5">
