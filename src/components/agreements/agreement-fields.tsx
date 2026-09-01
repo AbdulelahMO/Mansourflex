@@ -17,6 +17,7 @@ export type AgreementLineValue = {
 
 export type AgreementValues = {
   ownerId: string;
+  settlementFrequency?: string | null;
   startDate?: string | Date | null;
   endDate?: string | Date | null;
   status: string;
@@ -41,6 +42,15 @@ const STATUS_OPTIONS = [
   { value: "EXPIRED", label: "منتهية" },
   { value: "TERMINATED", label: "مفسوخة" },
 ];
+
+export const SETTLEMENT_FREQUENCIES = [
+  { value: "PER_COLLECTION", label: "مع كل تحصيل — تُخصم الأتعاب ويُورَّد الصافي" },
+  { value: "MONTHLY", label: "شهرياً" },
+  { value: "QUARTERLY", label: "ربع سنوي" },
+  { value: "SEMI_ANNUAL", label: "نصف سنوي" },
+  { value: "ANNUAL", label: "سنوياً" },
+  { value: "ON_DEMAND", label: "عند الطلب أو الاتفاق" },
+] as const;
 
 const AUTHORITIES = [
   { name: "canSignContracts", label: "توقيع عقود الإيجار نيابة عن المالك" },
@@ -193,6 +203,27 @@ export function AgreementFields({
             </div>
           </div>
         )}
+
+        {/* When the parties settle up is a clause they agree on, not a system preference: some
+            owners take the net of every collection, others reckon once every six months. */}
+        <div className="space-y-1.5">
+          <Label htmlFor="settlementFrequency">دورية التسوية والتوريد</Label>
+          <select
+            id="settlementFrequency"
+            name="settlementFrequency"
+            defaultValue={agreement?.settlementFrequency ?? "PER_COLLECTION"}
+            className="h-11 w-full rounded-lg border md:h-9 border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring"
+          >
+            {SETTLEMENT_FREQUENCIES.map((f) => (
+              <option key={f.value} value={f.value}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground">
+            متى تُخصم أتعاب الإدارة ويُورَّد للمالك نصيبه. تُطبع في الاتفاقية لأنها بند متفق عليه.
+          </p>
+        </div>
       </Section>
 
       <Section title="الصلاحيات الممنوحة لمدير الأملاك">

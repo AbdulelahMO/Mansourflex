@@ -52,9 +52,9 @@ export async function createCommissionCollection(_prev: ActionState, formData: F
   // another property, or an amount already settled by keeping it out of a transfer.
   if (formData.get("acknowledge") !== "on") {
     const account = await buildingCommissionAccount(building.id);
-    if (d.amount > account.dueFromOwner + 0.5) {
+    if (d.amount > account.unsettled + 0.5) {
       return {
-        error: `المبلغ يتجاوز العمولة المطلوبة من المالك عن هذا العقار (${formatCurrency(account.dueFromOwner)}). راجعه، أو أكّد المتابعة.`,
+        error: `المبلغ يتجاوز الأتعاب غير المسوّاة عن هذا العقار (${formatCurrency(account.unsettled)}). راجعه، أو أكّد المتابعة.`,
         needsAcknowledge: true,
       };
     }

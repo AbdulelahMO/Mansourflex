@@ -19,17 +19,17 @@ const METHOD_OPTIONS = ["تحويل بنكي", "نقدي", "شيك", "خصم م�
 export function CommissionDialog({
   buildingId,
   buildingName,
-  dueAmount,
+  unsettledAmount,
   triggerLabel = "تسجيل قبض أتعاب",
 }: {
   buildingId: string;
   buildingName: string;
-  /** What the owner still owes, offered as the default so the common case is one click. */
-  dueAmount: number;
+  /** What is earned and not yet settled, offered as the default so the common case is one click. */
+  unsettledAmount: number;
   triggerLabel?: string;
 }) {
   const today = new Date().toISOString().slice(0, 10);
-  const due = Math.round(dueAmount * 100) / 100;
+  const due = Math.round(unsettledAmount * 100) / 100;
 
   const [amount, setAmount] = useState(due > 0 ? String(due) : "");
   const [acknowledged, setAcknowledged] = useState(false);
@@ -46,8 +46,8 @@ export function CommissionDialog({
       title="تسجيل قبض أتعاب الإدارة"
       description={
         due > 0.5
-          ? `${buildingName} — المطلوب من المالك ${formatCurrency(dueAmount)}`
-          : `${buildingName} — لا مطلوب حالياً: أتعابك مخصومة من التحصيل`
+          ? `${buildingName} — أتعاب لم تُسوَّ ${formatCurrency(unsettledAmount)}`
+          : `${buildingName} — لا توجد أتعاب غير مسوّاة`
       }
       action={createCommissionCollection}
       submitLabel="تسجيل وإصدار السند"
@@ -109,8 +109,8 @@ export function CommissionDialog({
         <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
           <p>
             {due > 0.5
-              ? `المبلغ يتجاوز الأتعاب المطلوبة عن هذا العقار (${formatCurrency(dueAmount)}). ما زاد عن ذلك يخصّ عقاراً آخر أو سبق تحصيله بالخصم من التوريد — ولكل عقار سنده.`
-              : "لا يوجد على هذا العقار أتعاب مطلوبة: ما استُحق منها مخصوم من التحصيل الذي في يدك. سجّل القبض فقط إن كان المالك قد سلّمك مبلغاً بالفعل."}
+              ? `المبلغ يتجاوز الأتعاب غير المسوّاة عن هذا العقار (${formatCurrency(unsettledAmount)}). ما زاد عن ذلك يخصّ عقاراً آخر أو سبق خصمه من توريد سابق — ولكل عقار سنده.`
+              : "لا توجد أتعاب غير مسوّاة على هذا العقار — سُوّيت كلها بسند. سجّل القبض فقط إن كان المالك قد سلّمك مبلغاً بالفعل."}
           </p>
           <label className="flex items-start gap-2">
             <input

@@ -300,11 +300,12 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
                           buildingId={l.buildingId}
                           buildingName={l.buildingName}
                           suggestedAmount={l.balance}
+                          unsettledFee={standings.get(l.buildingId)?.unsettled ?? 0}
                         />
                         <CommissionDialog
                           buildingId={l.buildingId}
                           buildingName={l.buildingName}
-                          dueAmount={standings.get(l.buildingId)?.dueFromOwner ?? 0}
+                          unsettledAmount={standings.get(l.buildingId)?.unsettled ?? 0}
                           triggerLabel="قبض أتعاب"
                         />
                       </div>

@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { PrintButton } from "@/components/contracts/print-button";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { formatHijri } from "@/lib/hijri";
-import { COMMISSION_BASIS_LABEL } from "@/lib/commission";
+import { COMMISSION_BASIS_LABEL, SETTLEMENT_FREQUENCY_SENTENCES } from "@/lib/commission";
 import { DEFAULT_AGREEMENT_PREAMBLE, DEFAULT_AGREEMENT_CLOSING } from "@/lib/agreement-text";
 
 /** A labelled line inside a party block; omitted entirely when the value is missing. */
@@ -153,6 +153,11 @@ export default async function AgreementPrintPage(props: PageProps<"/agreements/[
                 ))}
               </tbody>
             </table>
+            <p className="mt-2">
+              {SETTLEMENT_FREQUENCY_SENTENCES[agreement.settlementFrequency] ??
+                SETTLEMENT_FREQUENCY_SENTENCES.PER_COLLECTION}
+              ، ويُصدَر بكل تسوية سندٌ يوضّح المخصوم والمورَّد.
+            </p>
           </Clause>
 
           <Clause number="الثاني" title="مدة الاتفاقية">

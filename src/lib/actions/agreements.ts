@@ -34,6 +34,7 @@ const agreementSchema = z.object({
   startDate: z.string().min(1, "تاريخ البداية مطلوب"),
   endDate: z.string().min(1, "تاريخ النهاية مطلوب"),
   status: z.enum(["ACTIVE", "EXPIRED", "TERMINATED"]),
+  settlementFrequency: z.enum(["PER_COLLECTION", "MONTHLY", "QUARTERLY", "SEMI_ANNUAL", "ANNUAL", "ON_DEMAND"]),
   signedAt: z.string().optional(),
   signedPlace: z.string().optional(),
   terms: z.string().optional(),
@@ -79,6 +80,13 @@ function parseForm(formData: FormData) {
     startDate: String(formData.get("startDate") ?? ""),
     endDate: String(formData.get("endDate") ?? ""),
     status: (String(formData.get("status") || "ACTIVE") as "ACTIVE" | "EXPIRED" | "TERMINATED"),
+    settlementFrequency: String(formData.get("settlementFrequency") || "PER_COLLECTION") as
+      | "PER_COLLECTION"
+      | "MONTHLY"
+      | "QUARTERLY"
+      | "SEMI_ANNUAL"
+      | "ANNUAL"
+      | "ON_DEMAND",
     signedAt: String(formData.get("signedAt") ?? ""),
     signedPlace: String(formData.get("signedPlace") ?? ""),
     terms: String(formData.get("terms") ?? ""),
@@ -140,6 +148,7 @@ export async function createAgreement(_prev: ActionState, formData: FormData): P
       status: d.status,
       signedAt: d.signedAt ? new Date(d.signedAt) : null,
       signedPlace: d.signedPlace || null,
+      settlementFrequency: d.settlementFrequency,
       terms: d.terms || null,
       duties: d.duties || null,
       notes: d.notes || null,
@@ -187,6 +196,7 @@ export async function updateAgreement(id: string, _prev: ActionState, formData: 
         status: d.status,
       signedAt: d.signedAt ? new Date(d.signedAt) : null,
       signedPlace: d.signedPlace || null,
+        settlementFrequency: d.settlementFrequency,
         terms: d.terms || null,
         duties: d.duties || null,
         notes: d.notes || null,

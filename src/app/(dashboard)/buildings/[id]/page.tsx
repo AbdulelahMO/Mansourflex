@@ -195,7 +195,7 @@ export default async function BuildingDetailPage(props: PageProps<"/buildings/[i
               <CommissionDialog
                 buildingId={building.id}
                 buildingName={building.name}
-                dueAmount={standing.dueFromOwner}
+                unsettledAmount={standing.unsettled}
                 triggerLabel="قبض أتعاب"
               />
             )}
@@ -253,11 +253,11 @@ export default async function BuildingDetailPage(props: PageProps<"/buildings/[i
           >
             {standing.percent === 0
               ? "لا اتفاقية إدارة سارية"
-              : standing.dueFromOwner > 0.5
-                ? `مطلوب من المالك ${formatCurrency(standing.dueFromOwner)}`
+              : standing.unsettled > 0.5
+                ? `أتعاب لم تُسوَّ ${formatCurrency(standing.unsettled)}`
                 : operatorExpenses > 0
                   ? `عمولة ${formatCurrency(managementFeeAmount)} · مصروفاته ${formatCurrency(operatorExpenses)}`
-                  : "مخصومة من التحصيل بالكامل"}
+                  : "كل الأتعاب مسوّاة بسند"}
           </Tile>
         </CardContent>
       </Card>

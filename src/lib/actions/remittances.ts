@@ -7,6 +7,7 @@ import { requirePermission, recordAudit } from "@/lib/authz";
 import { createDocumentWithNumber } from "@/lib/documents-core";
 import { buildingAccount } from "@/lib/owner-account";
 import { commissionForBuilding } from "@/lib/commission";
+import { buildingCommissionAccount } from "@/lib/commission-standing";
 import { formatCurrency } from "@/lib/format";
 import { runSensitive } from "@/lib/approvals";
 import type { ActionState } from "@/lib/types";
@@ -82,6 +83,44 @@ export async function createRemittance(_prev: ActionState, formData: FormData): 
     issuedById: user.id,
   });
 
+  // Settling the fee out of the transfer is the ordinary way it is paid, and it leaves no trace
+  // of its own unless one is made: the operator simply keeps it. So a deduction earns the same
+  // voucher a payment would, and the owner sees on the paper he signs what was held back.
+  let feeDoc: { documentNumber: string; amount: number } | null = null;
+  if (formData.get("deductFee") === "on") {
+    const account = await buildingCommissionAccount(building.id);
+    if (account.unsettled > 0.5) {
+      const fee = await prisma.commissionCollection.create({
+        data: {
+          buildingId: building.id,
+          ownerId: building.ownerId,
+          amount: account.unsettled,
+          collectedAt: remittedAt,
+          method: "خصم من التوريد",
+          reference: doc.documentNumber,
+          notes: `خُصمت من التوريد ${doc.documentNumber}`,
+          createdById: user.id,
+        },
+      });
+      const issued = await createDocumentWithNumber("COMMISSION_RECEIPT", {
+        status: "ISSUED",
+        amount: account.unsettled,
+        issueDate: remittedAt,
+        commissionId: fee.id,
+        issuedById: user.id,
+      });
+      feeDoc = { documentNumber: issued.documentNumber, amount: account.unsettled };
+      await prisma.ownerRemittance.update({
+        where: { id: remittance.id },
+        data: {
+          notes: [remittance.notes, `خُصمت أتعاب إدارة ${formatCurrency(account.unsettled)} بموجب السند ${issued.documentNumber}`]
+            .filter(Boolean)
+            .join(" — "),
+        },
+      });
+    }
+  }
+
   await recordAudit({
     user,
     action: "remittances.create",
@@ -92,7 +131,12 @@ export async function createRemittance(_prev: ActionState, formData: FormData): 
   revalidatePath("/documents");
   revalidatePath(`/owners/${building.ownerId}`);
   revalidatePath(`/buildings/${building.id}`);
-  return { success: true, message: `تم تسجيل التوريد وإصدار السند ${doc.documentNumber}` };
+  return {
+    success: true,
+    message: feeDoc
+      ? `تم تسجيل التوريد (${doc.documentNumber}) وخصم أتعاب ${formatCurrency(feeDoc.amount)} بالسند ${feeDoc.documentNumber}`
+      : `تم تسجيل التوريد وإصدار السند ${doc.documentNumber}`,
+  };
 }
 
 /** Reverses a transfer entered by mistake; its voucher goes with it. */

@@ -17,12 +17,15 @@ export function RemittanceDialog({
   buildingId,
   buildingName,
   suggestedAmount,
+  unsettledFee = 0,
   triggerLabel = "تسجيل توريد",
 }: {
   buildingId: string;
   buildingName: string;
   /** The outstanding balance, offered as the default so the common case is one click. */
   suggestedAmount: number;
+  /** Fee earned with no voucher against it — settled out of this transfer unless told otherwise. */
+  unsettledFee?: number;
   triggerLabel?: string;
 }) {
   const today = new Date().toISOString().slice(0, 10);
@@ -32,6 +35,9 @@ export function RemittanceDialog({
   // almost always a lump sum entered against a single building — the mistake this catches.
   const [amount, setAmount] = useState(String(defaultAmount));
   const [acknowledged, setAcknowledged] = useState(false);
+  // Deducting is the ordinary case — the fee is kept out of the transfer — so it is on by default,
+  // and unticking it says «this transfer settles no fee», which is a decision worth making aloud.
+  const [deductFee, setDeductFee] = useState(true);
   const exceeds = Number(amount || 0) > Math.round(suggestedAmount * 100) / 100 + 0.5;
 
   return (
@@ -99,6 +105,24 @@ export function RemittanceDialog({
         <Label htmlFor={`notes-${buildingId}`}>ملاحظات</Label>
         <Textarea id={`notes-${buildingId}`} name="notes" />
       </div>
+
+      {unsettledFee > 0.5 && (
+        <label className="flex items-start gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
+          <input
+            type="checkbox"
+            name="deductFee"
+            checked={deductFee}
+            onChange={(e) => setDeductFee(e.target.checked)}
+            className="mt-0.5 size-4 accent-primary"
+          />
+          <span>
+            خصم أتعاب الإدارة المستحقة ({formatCurrency(unsettledFee)}) على هذا التوريد
+            <span className="block text-xs text-muted-foreground">
+              يصدر لها سند أتعاب مستقل، ويُذكر رقمه في سند التوريد — فيرى المالك الخصم في الورقة التي يوقّعها.
+            </span>
+          </span>
+        </label>
+      )}
 
       {exceeds && (
         <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">

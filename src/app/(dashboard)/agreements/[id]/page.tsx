@@ -11,7 +11,7 @@ import { DeleteButton } from "@/components/delete-button";
 import { deleteAgreement } from "@/lib/actions/agreements";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { netCollected, commissionBase, vatWithin } from "@/lib/commission";
+import { netCollected, commissionBase, vatWithin, SETTLEMENT_FREQUENCY_LABELS } from "@/lib/commission";
 import { ownerExpensesByBuilding, operatorExpensesByBuilding } from "@/lib/expenses";
 import { buildSettlement } from "@/lib/settlement";
 import { SettleAgreementDialog } from "@/components/agreements/settle-dialog";
@@ -271,7 +271,8 @@ export default async function AgreementDetailPage(props: PageProps<"/agreements/
           <CardTitle className="text-base">المبنى والعمولة</CardTitle>
           <p className="text-xs text-muted-foreground">
             المبالغ المحصّلة خلال فترة الاتفاقية ({formatDate(agreement.startDate)} — {formatDate(agreement.endDate)})،
-            والعمولة محسوبة لكل مبنى بنسبته من صافي المحصّل بعد المصروفات
+            والعمولة محسوبة لكل مبنى بنسبته من صافي المحصّل بعد المصروفات ودون الضريبة · التسوية{" "}
+            {SETTLEMENT_FREQUENCY_LABELS[agreement.settlementFrequency] ?? "مع كل تحصيل"}
           </p>
         </CardHeader>
         <CardContent className="p-0">

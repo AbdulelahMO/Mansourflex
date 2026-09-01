@@ -38,6 +38,26 @@ export async function commissionForBuilding(buildingId: string): Promise<Commiss
   return (await commissionByBuilding([buildingId])).get(buildingId) ?? null;
 }
 
+/** The settlement clause in words, for the agreement and the screens that quote it. */
+export const SETTLEMENT_FREQUENCY_LABELS: Record<string, string> = {
+  PER_COLLECTION: "مع كل تحصيل",
+  MONTHLY: "شهرياً",
+  QUARTERLY: "ربع سنوي",
+  SEMI_ANNUAL: "نصف سنوي",
+  ANNUAL: "سنوياً",
+  ON_DEMAND: "عند الطلب أو الاتفاق",
+};
+
+/** The same clause as a sentence a contract can carry. */
+export const SETTLEMENT_FREQUENCY_SENTENCES: Record<string, string> = {
+  PER_COLLECTION: "تُخصم أتعاب الإدارة من كل مبلغ يُحصَّل، ويُورَّد الصافي للطرف الثاني",
+  MONTHLY: "تُسوَّى الأتعاب ويُورَّد نصيب الطرف الثاني شهرياً",
+  QUARTERLY: "تُسوَّى الأتعاب ويُورَّد نصيب الطرف الثاني كل ثلاثة أشهر",
+  SEMI_ANNUAL: "تُسوَّى الأتعاب ويُورَّد نصيب الطرف الثاني كل ستة أشهر",
+  ANNUAL: "تُسوَّى الأتعاب ويُورَّد نصيب الطرف الثاني سنوياً",
+  ON_DEMAND: "تُسوَّى الأتعاب ويُورَّد نصيب الطرف الثاني عند الطلب أو حسب ما يتفقان عليه",
+};
+
 export type CommissionAmounts = {
   /** Rent actually collected, tax included — as the money arrived. */
   collected: number;

@@ -287,6 +287,16 @@ model Expense {
 
 /// اتفاقية إدارة الأملاك الموقّعة مع المالك: شروطها وواجباتها وصلاحياتها على مستوى الوثيقة،
 /// ونسبة العمولة على مستوى كل مبنى مشمول (انظر AgreementBuilding).
+/// دورية تسوية أتعاب الإدارة وتوريد نصيب المالك — بندٌ يُتفق عليه، لا إعداد نظام
+enum SettlementFrequency {
+  PER_COLLECTION // مع كل تحصيل: تُخصم الأتعاب ويُورَّد الصافي
+  MONTHLY
+  QUARTERLY
+  SEMI_ANNUAL
+  ANNUAL
+  ON_DEMAND // عند الطلب أو الاتفاق
+}
+
 model ManagementAgreement {
   id              String          @id @default(cuid())
   agreementNumber String          @unique
@@ -297,6 +307,9 @@ model ManagementAgreement {
   // التوقيع — قد يسبق تاريخ بداية السريان
   signedAt    DateTime?
   signedPlace String?
+
+  /// كل كم تُخصم الأتعاب ويُورَّد للمالك نصيبه — يُطبع في الاتفاقية لأنه متفق عليه
+  settlementFrequency SettlementFrequency @default(PER_COLLECTION)
 
   terms  String? // الشروط
   duties String? // واجبات مدير الأملاك

@@ -12,6 +12,8 @@ import { ownerExpensesForBuilding } from "@/lib/expenses";
  */
 export type BuildingCommissionStanding = CommissionAccount & {
   percent: number;
+  /** How often the parties agreed to settle — the clause, not a system setting. */
+  frequency: string | null;
   /** The agreement the rate comes from, so a screen can link to the terms it is applying. */
   agreement: { id: string; number: string } | null;
   /** Everything collected on the property, tax included. */
@@ -26,8 +28,12 @@ export type BuildingCommissionStanding = CommissionAccount & {
 };
 
 export async function buildingCommissionAccount(buildingId: string): Promise<BuildingCommissionStanding> {
-  const [terms, collections, expenses, remittedAgg, receiptedAgg] = await Promise.all([
+  const [terms, agreementLine, collections, expenses, remittedAgg, receiptedAgg] = await Promise.all([
     commissionForBuilding(buildingId),
+    prisma.agreementBuilding.findFirst({
+      where: { buildingId, agreement: { status: "ACTIVE" } },
+      select: { agreement: { select: { settlementFrequency: true } } },
+    }),
     prisma.payment.findMany({
       where: { contract: { unit: { buildingId } }, paidAmount: { gt: 0 } },
       select: { paidAmount: true, recipient: true, contract: { select: { vatRate: true } } },
@@ -55,16 +61,13 @@ export async function buildingCommissionAccount(buildingId: string): Promise<Bui
 
   return {
     percent: terms?.percent ?? 0,
+    frequency: agreementLine?.agreement.settlementFrequency ?? null,
     agreement: terms ? { id: terms.agreementId, number: terms.agreementNumber } : null,
     collected,
     vat,
     collectedByOwner,
     expenses,
-    ...commissionAccount({
-      earned,
-      operatorCollected: collected - collectedByOwner,
-      remitted: remittedAgg._sum.amount ?? 0,
-      receipted: receiptedAgg._sum.amount ?? 0,
-    }),
+    remitted: remittedAgg._sum.amount ?? 0,
+    ...commissionAccount({ earned, settled: receiptedAgg._sum.amount ?? 0 }),
   };
 }
