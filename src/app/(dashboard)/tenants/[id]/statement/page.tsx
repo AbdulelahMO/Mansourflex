@@ -11,6 +11,7 @@ import { contractStatement } from "@/lib/tenant-statement";
 import { annualRent } from "@/lib/rent-value";
 import { formatCurrencyPrecise, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { Fact } from "@/components/statements/fact";
 
 /** A day given as text, read in local time so the timezone cannot shift it. */
 function parseDate(value: unknown) {
@@ -24,32 +25,6 @@ function Figure({ label, value, tone }: { label: string; value: string; tone?: s
     <div className="rounded-lg border p-3">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className={cn("text-lg font-bold tabular-nums", tone)}>{value}</p>
-    </div>
-  );
-}
-
-/**
- * A labelled fact in the statement's head. Every value is fenced in `bdi`: an Arabic label
- * butting against Latin digits lets the bidi algorithm run them together, and «هوية 1188179739»
- * beside «جوال 0581939603» came out as a single 21-digit number.
- */
-function Field({
-  label,
-  value,
-  note,
-}: {
-  label: string;
-  value: string | null | undefined;
-  note?: string | null;
-}) {
-  if (!value) return null;
-  return (
-    <div className="min-w-0">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="text-sm font-medium">
-        <bdi>{value}</bdi>
-      </dd>
-      {note && <p className="text-xs text-muted-foreground">{note}</p>}
     </div>
   );
 }
@@ -244,20 +219,20 @@ export default async function TenantStatementPage(props: PageProps<"/tenants/[id
             {/* Who, which property, and over what term — laid out as labelled facts rather than
                 one run-on line, since this is the part a reader checks before the figures. */}
             <dl className="grid gap-x-6 gap-y-3 rounded-lg border bg-muted/30 p-4 sm:grid-cols-3 lg:grid-cols-4 print:grid-cols-3">
-              <Field label="المستأجر" value={tenant.name} />
-              <Field label="رقم الهوية" value={tenant.nationalId} />
-              <Field label="الجوال" value={tenant.phone} />
-              <Field label="رقم العقد" value={selected.contractNumber} />
-              <Field
+              <Fact label="المستأجر" value={tenant.name} />
+              <Fact label="رقم الهوية" value={tenant.nationalId} />
+              <Fact label="الجوال" value={tenant.phone} />
+              <Fact label="رقم العقد" value={selected.contractNumber} />
+              <Fact
                 label="العقار والوحدة"
                 value={`${selected.unit.building.name} - وحدة ${selected.unit.unitNumber}`}
               />
-              <Field
+              <Fact
                 label="مدة العقد"
                 value={`${formatDate(selected.startDate)} — ${formatDate(selected.endDate)}`}
               />
-              <Field label="الإيجار السنوي" value={formatCurrencyPrecise(yearly.amount)} note={risingNote} />
-              <Field
+              <Fact label="الإيجار السنوي" value={formatCurrencyPrecise(yearly.amount)} note={risingNote} />
+              <Fact
                 label="القسط ودوريته"
                 value={
                   summary.instalment === null

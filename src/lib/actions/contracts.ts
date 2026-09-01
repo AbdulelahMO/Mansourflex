@@ -304,10 +304,35 @@ export async function updateContractStatus(id: string, status: "ACTIVE" | "EXPIR
     await prisma.unit.update({ where: { id: contract.unitId }, data: { status: "OCCUPIED" } });
   }
 
+  // A broken lease stops calling for rent. Its instalments used to stay behind, so the property
+  // went on reporting an income it would never see and arrears that nobody owed — the contract
+  // was ended everywhere except in the figures. What was already paid, or already invoiced, is
+  // left alone: those are records of things that happened, and the tenant still owes what fell
+  // due before the lease was broken.
+  let dropped = 0;
+  if (status === "TERMINATED") {
+    const removable = await prisma.payment.findMany({
+      where: {
+        contractId: id,
+        dueDate: { gt: new Date() },
+        OR: [{ paidAmount: null }, { paidAmount: 0 }],
+        documents: { none: {} },
+      },
+      select: { id: true },
+    });
+    if (removable.length > 0) {
+      await prisma.payment.deleteMany({ where: { id: { in: removable.map((p) => p.id) } } });
+      dropped = removable.length;
+    }
+    revalidatePath("/payments");
+  }
+
   await recordAudit({
     user,
     action: "contracts.edit",
-    summary: `${status === "ACTIVE" ? "تفعيل" : status === "EXPIRED" ? "إنهاء" : "فسخ"} العقد ${contract.contractNumber}`,
+    summary:
+      `${status === "ACTIVE" ? "تفعيل" : status === "EXPIRED" ? "إنهاء" : "فسخ"} العقد ${contract.contractNumber}` +
+      (dropped > 0 ? ` — وحُذفت ${dropped} دفعة لم يحن موعدها` : ""),
     targetId: id,
   });
 

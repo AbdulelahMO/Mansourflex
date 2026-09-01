@@ -5,6 +5,7 @@ const base = {
   billed: 100000,
   outstanding: 0,
   collected: 100000,
+  collectedVat: 0,
   collectedByOwner: 0,
   ownerExpenses: 0,
   commissionPercent: 10,
@@ -61,5 +62,37 @@ describe("التقريب", () => {
     expect(a.commission).toBe(2500);
     expect(a.payableToOwner).toBe(30833.33);
     expect(a.balance).toBe(30833.33);
+  });
+});
+
+describe("ضريبة القيمة المضافة", () => {
+  it("لا عمولة على الضريبة — فهي للدولة لا للمالك", () => {
+    // 115,000 محصّلة على إيجار 100,000 وضريبة 15,000، والعمولة 10%.
+    const a = computeAccount({ ...base, collected: 115000, collectedVat: 15000 });
+
+    expect(a.commissionBase).toBe(100000);
+    expect(a.commission).toBe(10000); // لا 11,500
+  });
+
+  it("تبقى الضريبة في مستحق المالك ليوردها بنفسه", () => {
+    const a = computeAccount({ ...base, collected: 115000, collectedVat: 15000 });
+
+    expect(a.netCollected).toBe(115000);
+    expect(a.payableToOwner).toBe(105000); // 115,000 − 10,000 عمولة
+  });
+
+  it("تُخصم المصروفات والضريبة كلتاهما قبل العمولة", () => {
+    const a = computeAccount({ ...base, collected: 115000, collectedVat: 15000, ownerExpenses: 20000 });
+
+    expect(a.commissionBase).toBe(80000);
+    expect(a.commission).toBe(8000);
+    expect(a.payableToOwner).toBe(87000); // 95,000 − 8,000
+  });
+
+  it("العقد غير الخاضع للضريبة يبقى حسابه كما كان", () => {
+    const a = computeAccount({ ...base, collected: 100000, collectedVat: 0 });
+
+    expect(a.commissionBase).toBe(100000);
+    expect(a.commission).toBe(10000);
   });
 });

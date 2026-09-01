@@ -16,10 +16,14 @@ export type BuildingAccount = {
   outstanding: number;
   /** Everything collected in the period, whoever received it. */
   collected: number;
+  /** The tax inside that collection — passed to the state, and no part of anyone's income. */
+  collectedVat: number;
   /** The part the owner collected directly — already in their hands. */
   collectedByOwner: number;
   ownerExpenses: number;
   netCollected: number;
+  /** What the commission is taken from: the collection less its tax and the owner's expenses. */
+  commissionBase: number;
   commissionPercent: number;
   commission: number;
   /** Owner's share of the period before anything is settled against it. */
@@ -45,7 +49,7 @@ export async function buildingAccount(
 ): Promise<BuildingAccount> {
   const window = { gte: period.from, lte: period.to };
 
-  const [unitCount, occupiedCount, billedAgg, dueShort, allAgg, ownerAgg, expenseAgg, remittanceAgg] = await Promise.all([
+  const [unitCount, occupiedCount, billedAgg, dueShort, collections, expenseAgg, remittanceAgg] = await Promise.all([
     prisma.unit.count({ where: { buildingId } }),
     prisma.unit.count({ where: { buildingId, status: "OCCUPIED" } }),
     // Billed by the contracts for this period, collected or not.
@@ -62,13 +66,11 @@ export async function buildingAccount(
       },
       select: { amount: true, paidAmount: true },
     }),
-    prisma.payment.aggregate({
+    // Read row by row rather than summed: the tax rate lives on each payment's contract, and the
+    // tax inside a collection cannot be recovered from a total that has already swallowed it.
+    prisma.payment.findMany({
       where: { contract: { unit: { buildingId } }, paidDate: window },
-      _sum: { paidAmount: true },
-    }),
-    prisma.payment.aggregate({
-      where: { contract: { unit: { buildingId } }, paidDate: window, recipient: "OWNER" },
-      _sum: { paidAmount: true },
+      select: { paidAmount: true, recipient: true, contract: { select: { vatRate: true } } },
     }),
     prisma.expense.aggregate({
       where: { buildingId, bearer: "OWNER", paidDate: window },
@@ -83,8 +85,16 @@ export async function buildingAccount(
 
   const billed = billedAgg._sum.amount ?? 0;
   const outstanding = dueShort.reduce((s, p) => s + Math.max(0, p.amount - (p.paidAmount ?? 0)), 0);
-  const collected = allAgg._sum.paidAmount ?? 0;
-  const collectedByOwner = ownerAgg._sum.paidAmount ?? 0;
+  let collected = 0;
+  let collectedVat = 0;
+  let collectedByOwner = 0;
+  for (const p of collections) {
+    const paid = p.paidAmount ?? 0;
+    collected += paid;
+    // The instalment was stored tax-inclusive, so the tax is the part above the rent it grossed up.
+    collectedVat += paid - paid / (1 + (p.contract.vatRate ?? 0) / 100);
+    if (p.recipient === "OWNER") collectedByOwner += paid;
+  }
   const ownerExpenses = expenseAgg._sum.amount ?? 0;
   const remitted = remittanceAgg._sum.amount ?? 0;
 
@@ -93,14 +103,28 @@ export async function buildingAccount(
     buildingName,
     units: unitCount,
     occupiedUnits: occupiedCount,
-    ...computeAccount({ billed, outstanding, collected, collectedByOwner, ownerExpenses, commissionPercent, remitted }),
+    ...computeAccount({
+      billed,
+      outstanding,
+      collected,
+      collectedVat: Math.round(collectedVat * 100) / 100,
+      collectedByOwner,
+      ownerExpenses,
+      commissionPercent,
+      remitted,
+    }),
   };
 }
 
-/** The same account for every building an owner holds, plus the totals across them. */
-export async function ownerAccount(ownerId: string, period: Period) {
+/**
+ * The same account for every building an owner holds, plus the totals across them — or for one
+ * of them when asked. A settlement is made for a property, not for a portfolio: the commission
+ * is agreed per property and the transfer is issued against it, so the statement must be able to
+ * speak about one and only one when that is what is being settled.
+ */
+export async function ownerAccount(ownerId: string, period: Period, buildingId?: string) {
   const buildings = await prisma.building.findMany({
-    where: { ownerId },
+    where: { ownerId, ...(buildingId ? { id: buildingId } : {}) },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
@@ -118,9 +142,11 @@ export async function ownerAccount(ownerId: string, period: Period) {
       billed: acc.billed + l.billed,
       outstanding: acc.outstanding + l.outstanding,
       collected: acc.collected + l.collected,
+      collectedVat: acc.collectedVat + l.collectedVat,
       collectedByOwner: acc.collectedByOwner + l.collectedByOwner,
       ownerExpenses: acc.ownerExpenses + l.ownerExpenses,
       netCollected: acc.netCollected + l.netCollected,
+      commissionBase: acc.commissionBase + l.commissionBase,
       commission: acc.commission + l.commission,
       payableToOwner: acc.payableToOwner + l.payableToOwner,
       remitted: acc.remitted + l.remitted,
@@ -132,9 +158,11 @@ export async function ownerAccount(ownerId: string, period: Period) {
       billed: 0,
       outstanding: 0,
       collected: 0,
+      collectedVat: 0,
       collectedByOwner: 0,
       ownerExpenses: 0,
       netCollected: 0,
+      commissionBase: 0,
       commission: 0,
       payableToOwner: 0,
       remitted: 0,

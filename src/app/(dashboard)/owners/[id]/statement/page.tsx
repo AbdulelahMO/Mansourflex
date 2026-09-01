@@ -14,6 +14,13 @@ import { CancelDocumentButton } from "@/components/documents/cancel-document-but
 import { ownerAccount } from "@/lib/owner-account";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { Fact } from "@/components/statements/fact";
+
+/** The stored value is a key, not a word anyone reads: «INDIVIDUAL» is not a صفة. */
+const OWNER_TYPES: Record<string, string> = {
+  INDIVIDUAL: "فرد",
+  COMPANY: "شركة / مؤسسة",
+};
 
 /** Formats a calendar date without letting the timezone shift it a day. */
 function toInput(year: number, month: number, day: number) {
@@ -55,16 +62,28 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
   const toRaw = parseDate(params.to, fallback.to);
   const to = new Date(toRaw.getFullYear(), toRaw.getMonth(), toRaw.getDate(), 23, 59, 59, 999);
 
-  const [owner, org] = await Promise.all([
+  const [owner, org, buildings] = await Promise.all([
     prisma.owner.findUnique({ where: { id } }),
     prisma.organizationSettings.findUnique({ where: { id: "default" } }),
+    prisma.building.findMany({
+      where: { ownerId: id },
+      select: { id: true, name: true, city: true, district: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
   if (!owner) notFound();
 
-  const { lines, totals } = await ownerAccount(id, { from, to });
+  // A property that is not this owner's is not a filter but a mistake, and is ignored rather than
+  // returning an empty statement that reads as «this property produced nothing».
+  const requestedBuilding = typeof params.building === "string" ? params.building : "";
+  const building = buildings.find((b) => b.id === requestedBuilding) ?? null;
+
+  const { lines, totals } = await ownerAccount(id, { from, to }, building?.id);
 
   const remittances = await prisma.ownerRemittance.findMany({
-    where: { ownerId: id, remittedAt: { gte: from, lte: to } },
+    // The transfers must narrow with the account they settle: transfers for other properties
+    // listed under one property's statement are worse than no filter at all.
+    where: { ownerId: id, ...(building ? { buildingId: building.id } : {}), remittedAt: { gte: from, lte: to } },
     include: {
       building: { select: { name: true } },
       documents: { select: { id: true, documentNumber: true } },
@@ -91,6 +110,26 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
       </div>
 
       <form action={`/owners/${owner.id}/statement`} className="flex flex-wrap items-end gap-2 print:hidden">
+        {buildings.length > 1 && (
+          <div className="space-y-1">
+            <label htmlFor="building" className="block text-xs text-muted-foreground">
+              العقار
+            </label>
+            <select
+              id="building"
+              name="building"
+              defaultValue={building?.id ?? ""}
+              className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring"
+            >
+              <option value="">كل العقارات</option>
+              {buildings.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="space-y-1">
           <label htmlFor="from" className="block text-xs text-muted-foreground">
             من تاريخ
@@ -122,15 +161,40 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
 
       <Card className="print:border-0 print:shadow-none">
         <CardContent className="space-y-6 p-6 sm:p-8 print:p-0">
-          <header className="space-y-2 border-b pb-4 text-center">
-            {org?.logoUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={`/api/files/${org.logoUrl}`} alt="" className="mx-auto h-12 object-contain" />
-            )}
-            <h1 className="text-lg font-bold">كشف حساب المالك</h1>
-            <p className="text-sm text-muted-foreground">
-              {owner.name} · من {formatDate(from)} إلى {formatDate(toRaw)}
-            </p>
+          <header className="space-y-4 border-b pb-4">
+            <div className="space-y-1 text-center">
+              {org?.logoUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={`/api/files/${org.logoUrl}`} alt="" className="mx-auto h-12 object-contain" />
+              )}
+              <h1 className="text-lg font-bold">كشف حساب المالك</h1>
+              <p className="text-xs text-muted-foreground">
+                من {formatDate(from)} إلى {formatDate(toRaw)}
+              </p>
+            </div>
+
+            {/* Whose account, and by which numbers he is known — the part a reader checks before
+                the figures, and what makes the sheet identify itself months later in a file. */}
+            <dl className="grid gap-x-6 gap-y-3 rounded-lg border bg-muted/30 p-4 sm:grid-cols-3 lg:grid-cols-4 print:grid-cols-3">
+              <Fact label="المالك" value={owner.name} />
+              <Fact label="الصفة" value={OWNER_TYPES[owner.ownerType ?? ""]} />
+              <Fact label="رقم الهوية" value={owner.nationalId} />
+              <Fact label="الرقم الموحّد" value={owner.unifiedNumber} />
+              <Fact label="الرقم الضريبي" value={owner.taxNumber} />
+              <Fact label="الجوال" value={owner.phone} />
+              <Fact
+                label="ممثل المالك"
+                value={owner.representativeName}
+                note={owner.representativePhone}
+              />
+              <Fact
+                label="العقار"
+                value={building ? building.name : "كل العقارات"}
+                // Named properties repeat across cities — «برج الواحة» is not one building, and a
+                // statement filed away needs to say which one it was about.
+                note={building ? [building.city, building.district].filter(Boolean).join(" — ") : null}
+              />
+            </dl>
           </header>
 
           <div className="overflow-x-auto">
@@ -143,7 +207,7 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
                   <TableHead className="text-left">المحصّل</TableHead>
                   <TableHead className="text-left">المتأخر</TableHead>
                   <TableHead className="text-left">المصروفات</TableHead>
-                  <TableHead className="text-left print:hidden">صافي المحصّل</TableHead>
+                  <TableHead className="text-left print:hidden">أساس العمولة</TableHead>
                   <TableHead className="text-left">العمولة</TableHead>
                   <TableHead className="text-left">مستحق المالك</TableHead>
                   <TableHead className="text-left">قبضه المالك</TableHead>
@@ -172,7 +236,16 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
                       </span>
                     </TableCell>
                     <TableCell className="text-left tabular-nums">{formatCurrency(l.billed)}</TableCell>
-                    <TableCell className="text-left tabular-nums">{formatCurrency(l.collected)}</TableCell>
+                    <TableCell className="text-left tabular-nums">
+                      {formatCurrency(l.collected)}
+                      {/* The tax inside the collection, named where the money is, so nobody has to
+                          work out why the commission is smaller than the percentage suggests. */}
+                      {l.collectedVat > 0 && (
+                        <span className="block text-xs text-muted-foreground">
+                          منها ضريبة {formatCurrency(l.collectedVat)}
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell
                       className={cn("text-left tabular-nums", l.outstanding > 0 ? "text-red-600" : "text-muted-foreground")}
                     >
@@ -181,7 +254,7 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
                     <TableCell className="text-left tabular-nums text-muted-foreground">
                       {formatCurrency(l.ownerExpenses)}
                     </TableCell>
-                    <TableCell className="text-left tabular-nums print:hidden">{formatCurrency(l.netCollected)}</TableCell>
+                    <TableCell className="text-left tabular-nums print:hidden">{formatCurrency(l.commissionBase)}</TableCell>
                     <TableCell className="text-left tabular-nums text-muted-foreground">
                       {formatCurrency(l.commission)}
                     </TableCell>
@@ -206,6 +279,8 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
                     </TableCell>
                   </TableRow>
                 ))}
+                {/* With one property on the sheet the totals row repeats it word for word. */}
+                {lines.length > 1 && (
                 <TableRow className="bg-muted/60 font-bold">
                   <TableCell>الإجمالي</TableCell>
                   <TableCell className="text-left">
@@ -224,7 +299,7 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
                     {formatCurrency(totals.outstanding)}
                   </TableCell>
                   <TableCell className="text-left tabular-nums">{formatCurrency(totals.ownerExpenses)}</TableCell>
-                  <TableCell className="text-left tabular-nums print:hidden">{formatCurrency(totals.netCollected)}</TableCell>
+                  <TableCell className="text-left tabular-nums print:hidden">{formatCurrency(totals.commissionBase)}</TableCell>
                   <TableCell className="text-left tabular-nums">{formatCurrency(totals.commission)}</TableCell>
                   <TableCell className="text-left tabular-nums">{formatCurrency(totals.payableToOwner)}</TableCell>
                   <TableCell className="text-left tabular-nums">{formatCurrency(totals.collectedByOwner)}</TableCell>
@@ -236,6 +311,7 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
                   </TableCell>
                   <TableCell className="print:hidden" />
                 </TableRow>
+                )}
               </TableBody>
             </Table>
           </div>
@@ -248,9 +324,10 @@ export default async function OwnerStatementPage(props: PageProps<"/owners/[id]/
           )}
 
           <p className="text-xs leading-6 text-muted-foreground">
-            «الإشغال» عدد الوحدات المؤجرة من إجمالي وحدات العقار، و«إيراد الفترة» هو ما تستحقه عقود هذه الفترة، و«المحصّل» ما وصل فعلاً منه ومن فترات سابقة، و«المتأخر» ما
-            حلّ موعده ولم يُحصَّل بعد. و«قبضه المالك» هو ما استلمه المالك مباشرة من المستأجرين فيُخصم من مستحقه لأنه
-            وصله فعلاً، وتبقى عمولة الإدارة مستحقة عليه. و«الرصيد» بالسالب يعني أن المالك مدين لمدير الأملاك.
+            {/* Only what the column headings cannot say for themselves. */}
+            «إيراد الفترة» ما تستحقه العقود القائمة لا طاقة العقار كاملة · العمولة على الإيجار بعد المصروفات
+            دون الضريبة، والضريبة تبقى في مستحق المالك ليوردها · ما قبضه المالك مباشرة يُخصم من مستحقه
+            وتبقى العمولة عليه · الرصيد بالسالب يعني أن المالك مدين للمكتب.
           </p>
         </CardContent>
       </Card>
