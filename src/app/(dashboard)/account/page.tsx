@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +20,9 @@ export default async function AccountPage() {
     where: { id: session.id },
     include: { staffRole: { select: { name: true } } },
   });
-  if (!account) return null;
+  // A blank page is the worst answer: it says nothing, and this is the one screen that would
+  // have told its owner what their account even is.
+  if (!account) redirect("/session-ended");
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">

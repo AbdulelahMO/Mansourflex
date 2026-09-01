@@ -18,8 +18,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // A temporary password buys access to one screen only: the one that replaces it.
   const account = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { mustChangePassword: true },
+    select: { mustChangePassword: true, isActive: true },
   });
+
+  // The token outlives the account it names — a stopped employee keeps browsing on it, and a
+  // token issued before the database was replaced names a user that no longer exists at all.
+  // Neither may be left inside: the session is ended and its holder sent back to the door.
+  if (!account || !account.isActive) redirect("/session-ended");
   if (account?.mustChangePassword) {
     const pathname = (await headers()).get("x-pathname") ?? "";
     if (!pathname.startsWith("/account")) redirect("/account");

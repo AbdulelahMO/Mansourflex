@@ -16,12 +16,24 @@ import { Button } from "@/components/ui/button";
 import { KeyRound, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 import { resetEmployeePassword } from "@/lib/actions/staff";
+import type { ActionState } from "@/lib/types";
 
 /**
  * The answer to a forgotten password. The new one is shown here once and never stored in
  * readable form, so it has to be handed over now — and the employee must replace it anyway.
  */
-export function ResetPasswordButton({ employeeId, name }: { employeeId: string; name: string }) {
+export function ResetPasswordButton({
+  employeeId,
+  name,
+  action,
+  subject = "الموظف",
+}: {
+  employeeId: string;
+  name: string;
+  /** An administrator's password is reset by its own action; the dialog is the same act. */
+  action?: () => Promise<ActionState>;
+  subject?: string;
+}) {
   const [open, setOpen] = useState(false);
   const [temporary, setTemporary] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -29,7 +41,7 @@ export function ResetPasswordButton({ employeeId, name }: { employeeId: string; 
 
   function run() {
     startTransition(async () => {
-      const result = await resetEmployeePassword(employeeId);
+      const result = action ? await action() : await resetEmployeePassword(employeeId);
       if (result.error) {
         toast.error(result.error);
         setOpen(false);
@@ -73,7 +85,7 @@ export function ResetPasswordButton({ employeeId, name }: { employeeId: string; 
           <AlertDialogTitle>إعادة تعيين كلمة مرور {name}</AlertDialogTitle>
           <AlertDialogDescription>
             {temporary
-              ? "سلّم هذه الكلمة للموظف الآن — لن تظهر مرة أخرى، وسيُطلب منه تغييرها عند أول دخول."
+              ? `سلّم هذه الكلمة ${subject === "الموظف" ? "للموظف" : "له"} الآن — لن تظهر مرة أخرى، وسيُطلب منه تغييرها عند أول دخول.`
               : "تُلغى كلمة مروره الحالية وتُولَّد كلمة مؤقتة تُعرض لك مرة واحدة. استخدمها عند نسيانه كلمة المرور."}
           </AlertDialogDescription>
         </AlertDialogHeader>

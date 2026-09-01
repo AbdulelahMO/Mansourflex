@@ -314,3 +314,115 @@ export async function approveRequest(id: string, note?: string): Promise<ActionS
 export async function rejectRequest(id: string, note?: string): Promise<ActionState> {
   return decideApproval(id, false, note);
 }
+
+/* ————————————————— المديرون —————————————————
+ *
+ * An administrator has nobody above them: no role restrains what they may do, no approval is
+ * asked of them, and nothing they do is held back for review. So the account is not created
+ * lightly — but it must be creatable from inside the system, or the only way to make one is a
+ * command on the server, which is exactly the dependence the system should spare its owner.
+ */
+
+const adminSchema = z.object({
+  name: z.string().trim().min(1, "الاسم مطلوب"),
+  email: z.string().trim().email("البريد الإلكتروني غير صحيح"),
+});
+
+export async function createAdmin(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const admin = await requireAdmin();
+
+  const parsed = adminSchema.safeParse({
+    name: String(formData.get("name") ?? ""),
+    email: String(formData.get("email") ?? ""),
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "تحقق من الحقول" };
+  const d = { ...parsed.data, email: parsed.data.email.toLowerCase() };
+
+  const taken = await prisma.user.findUnique({ where: { email: d.email } });
+  if (taken) return { error: "البريد الإلكتروني مستخدم مسبقاً" };
+
+  const phone = String(formData.get("phone") ?? "").trim();
+  const temporary = generateTemporaryPassword();
+
+  const user = await prisma.user.create({
+    data: {
+      name: d.name,
+      email: d.email,
+      phone: phone || null,
+      passwordHash: await bcrypt.hash(temporary, 10),
+      mustChangePassword: true,
+      role: "ADMIN",
+    },
+  });
+
+  await recordAudit({
+    user: admin,
+    action: "staff.manage",
+    summary: `إضافة مدير نظام: ${d.name} (${d.email})`,
+    targetId: user.id,
+  });
+  revalidatePath("/settings/employees");
+  return {
+    success: true,
+    message: `أُضيف المدير. كلمة المرور المؤقتة: ${temporary} — سلّمها له، ولن تظهر مرة أخرى.`,
+  };
+}
+
+/** For a forgotten password, and it lifts the sign-in lock that the forgetting earned. */
+export async function resetAdminPassword(id: string): Promise<ActionState> {
+  const admin = await requireAdmin();
+
+  const target = await prisma.user.findUnique({ where: { id }, select: { name: true, email: true, role: true } });
+  if (!target || target.role !== "ADMIN") return { error: "الحساب غير موجود أو ليس حساب مدير" };
+
+  const temporary = generateTemporaryPassword();
+  await prisma.user.update({
+    where: { id },
+    data: { passwordHash: await bcrypt.hash(temporary, 10), mustChangePassword: true },
+  });
+  // The failures that piled up were against a password that no longer exists; making its owner
+  // wait out a lock earned by a password they no longer have is a punishment for nothing.
+  await prisma.loginAttempt.deleteMany({ where: { email: target.email } });
+
+  await recordAudit({
+    user: admin,
+    action: "staff.manage",
+    summary: `إعادة تعيين كلمة مرور المدير ${target.name}`,
+    targetId: id,
+  });
+  revalidatePath("/settings/employees");
+  return {
+    success: true,
+    message: `كلمة المرور المؤقتة لـ${target.name}: ${temporary} — سلّمها له، ولن تظهر مرة أخرى.`,
+  };
+}
+
+/**
+ * Stopping an administrator's account — the way an old one is closed once nobody holds its
+ * password any more. Deleting is not offered: an admin's name sits on contracts, receipts and
+ * the audit log, and those must keep naming somebody.
+ */
+export async function setAdminActive(id: string, isActive: boolean): Promise<ActionState> {
+  const admin = await requireAdmin();
+
+  const target = await prisma.user.findUnique({ where: { id }, select: { name: true, role: true, isActive: true } });
+  if (!target || target.role !== "ADMIN") return { error: "الحساب غير موجود أو ليس حساب مدير" };
+  if (id === admin.id) return { error: "لا يمكنك إيقاف حسابك أنت" };
+
+  if (!isActive) {
+    // The system must never be left without a way in.
+    const others = await prisma.user.count({ where: { role: "ADMIN", isActive: true, id: { not: id } } });
+    if (others === 0) return { error: "لا يمكن إيقاف آخر مدير نشط في النظام" };
+  }
+
+  await prisma.user.update({ where: { id }, data: { isActive } });
+
+  await recordAudit({
+    user: admin,
+    action: "staff.manage",
+    summary: `${isActive ? "تفعيل" : "إيقاف"} حساب المدير ${target.name}`,
+    targetId: id,
+  });
+  revalidatePath("/settings/employees");
+  return { success: true, message: isActive ? "فُعّل الحساب" : "أُوقف الحساب — لن يستطيع الدخول" };
+}

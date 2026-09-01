@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/session";
+import { AdminDialog } from "@/components/staff/admin-dialog";
+import { AdminActiveButton } from "@/components/staff/admin-active-button";
+import { resetAdminPassword } from "@/lib/actions/staff";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -10,12 +13,17 @@ import { EmployeeDialog, RoleDialog } from "@/components/staff/staff-dialogs";
 import { ResetPasswordButton } from "@/components/staff/reset-password-button";
 import { deleteEmployee, deleteRole } from "@/lib/actions/staff";
 import { formatDate } from "@/lib/format";
-import { UsersRound, ShieldCheck } from "lucide-react";
+import { UsersRound, ShieldCheck, ShieldAlert } from "lucide-react";
 
 export default async function EmployeesPage() {
-  await requireAdmin();
+  const viewer = await requireAdmin();
 
-  const [employees, roles] = await Promise.all([
+  const [admins, employees, roles] = await Promise.all([
+    prisma.user.findMany({
+      where: { role: "ADMIN" },
+      select: { id: true, name: true, email: true, phone: true, isActive: true, createdAt: true },
+      orderBy: { createdAt: "asc" },
+    }),
     prisma.user.findMany({
       where: { role: "EMPLOYEE" },
       include: { staffRole: { select: { id: true, name: true } }, _count: { select: { permissions: true } } },
@@ -37,6 +45,88 @@ export default async function EmployeesPage() {
           كل موظف يحمل دوراً، والدور يحمل الصلاحيات — ويمكن منح موظف بعينه استثناءً فوق دوره
         </p>
       </div>
+
+      {/* Administrators were the one kind of account the system could not show, let alone make:
+          creating or closing one meant a command on the server. An owner should never need the
+          server to manage who owns the system. */}
+      <Card className="gap-0 py-0">
+        <CardHeader className="flex flex-row items-center justify-between border-b py-3.5">
+          <CardTitle className="flex items-center gap-1.5 text-base">
+            <ShieldAlert className="size-4" />
+            المديرون ({admins.length})
+          </CardTitle>
+          <AdminDialog />
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>الاسم</TableHead>
+                  <TableHead>البريد الإلكتروني</TableHead>
+                  <TableHead>الجوال</TableHead>
+                  <TableHead>تاريخ الإنشاء</TableHead>
+                  <TableHead>الحالة</TableHead>
+                  <TableHead className="w-24">خيارات</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {admins.map((a) => (
+                  <TableRow key={a.id}>
+                    <TableCell className="font-medium">
+                      {a.name}
+                      {a.id === viewer.id && (
+                        <span className="ms-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                          أنت
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell dir="ltr" className="text-right">
+                      {a.email}
+                    </TableCell>
+                    <TableCell dir="ltr" className="text-right">
+                      {a.phone ?? "—"}
+                    </TableCell>
+                    <TableCell>{formatDate(a.createdAt)}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="secondary"
+                        className={a.isActive ? "border-0 bg-emerald-100 text-emerald-700" : "border-0"}
+                      >
+                        {a.isActive ? "نشط" : "موقوف"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {a.id === viewer.id ? (
+                        <Button asChild variant="ghost" size="sm">
+                          <Link href="/account">حسابي</Link>
+                        </Button>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <ResetPasswordButton
+                            employeeId={a.id}
+                            name={a.name}
+                            subject="المدير"
+                            action={resetAdminPassword.bind(null, a.id)}
+                          />
+                          <AdminActiveButton id={a.id} name={a.name} isActive={a.isActive} />
+                        </div>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          {admins.filter((a) => a.isActive).length < 2 && (
+            <p className="border-t bg-amber-50 px-4 py-3 text-xs text-amber-900">
+              لا يوجد إلا مدير واحد نشط. أضف ثانياً ليعيد أحدهما تعيين كلمة مرور الآخر عند نسيانها — وإلا
+              فالطريق الوحيد أمرٌ يُشغَّل على الخادم.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="gap-0 py-0">
         <CardHeader className="flex flex-row items-center justify-between border-b py-3.5">

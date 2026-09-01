@@ -5,6 +5,9 @@ import { LoginForm } from "@/components/login-form";
 export default async function LoginPage(props: PageProps<"/login">) {
   const params = await props.searchParams;
   const callbackUrl = typeof params.callbackUrl === "string" ? params.callbackUrl : "/";
+  // Sent here by the session guard: the account behind the token was stopped or is gone, and
+  // being returned to a sign-in screen with no explanation reads as the system having broken.
+  const ended = params.ended === "1";
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -16,7 +19,13 @@ export default async function LoginPage(props: PageProps<"/login">) {
           <CardTitle className="text-xl">نظام إدارة الأملاك العقارية</CardTitle>
           <CardDescription>سجّل الدخول للمتابعة</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
+          {ended && (
+            <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              انتهت جلستك لأن حسابك لم يعد موجوداً أو أُوقف. سجّل الدخول من جديد، وإن تكرر ذلك فراجع مدير
+              النظام.
+            </p>
+          )}
           <LoginForm callbackUrl={callbackUrl} />
         </CardContent>
       </Card>
