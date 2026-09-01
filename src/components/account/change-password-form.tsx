@@ -43,7 +43,7 @@ export function ChangePasswordForm({ forced }: { forced?: boolean }) {
           autoComplete="new-password"
         />
         <p className="text-xs text-muted-foreground">
-          {PASSWORD_MIN_LENGTH} أحرف على الأقل، وتحتوي على حرف ورقم
+          {PASSWORD_MIN_LENGTH} أحرف على الأقل، وتحتوي على حرف ورقم، ولا تكون كلمة شائعة أو مأخوذة من بريدك
         </p>
       </div>
 

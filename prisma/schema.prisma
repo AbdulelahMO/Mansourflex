@@ -774,3 +774,18 @@ model AuditLog {
   @@index([createdAt])
   @@map("audit_logs")
 }
+
+/// محاولات تسجيل الدخول — عليها يقوم القفل، ومنها يُعرف أن الحساب مستهدَف
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  /// البريد كما كُتب بعد التوحيد، ولو لم يكن لحساب موجود
+  email     String
+  ip        String?
+  userAgent String?
+  succeeded Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email, createdAt])
+  @@index([ip, createdAt])
+  @@map("login_attempts")
+}

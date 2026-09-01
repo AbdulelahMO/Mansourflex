@@ -27,7 +27,7 @@ export async function changeOwnPassword(_prev: ActionState, formData: FormData):
     return { error: "كلمة المرور الحالية غير صحيحة" };
   }
 
-  const invalid = passwordError(next);
+  const invalid = passwordError(next, account.email);
   if (invalid) return { error: invalid };
   if (next !== confirm) return { error: "كلمتا المرور غير متطابقتين" };
   if (await bcrypt.compare(next, account.passwordHash)) {

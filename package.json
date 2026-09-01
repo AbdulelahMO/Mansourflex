@@ -13,6 +13,7 @@
     "lint": "eslint",
     "db:seed": "tsx prisma/seed.ts",
     "db:bootstrap": "tsx prisma/bootstrap.ts",
+    "admin": "tsx scripts/admin-access.ts",
     "postinstall": "prisma generate",
     "test": "vitest run",
     "test:watch": "vitest"
