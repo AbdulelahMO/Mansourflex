@@ -114,6 +114,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     label: "التوريد وكشوف الملاك",
     permissions: [
       { key: "statements.view", label: "عرض كشف حساب المالك" },
+      { key: "statements.tenant", label: "عرض كشف حساب المستأجر" },
       { key: "remittances.create", label: "تسجيل توريد للمالك" },
 
     ],

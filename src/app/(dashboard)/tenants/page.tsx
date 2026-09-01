@@ -9,12 +9,15 @@ import { deleteTenant } from "@/lib/actions/tenants";
 import { PaginationTopBar, PaginationNav } from "@/components/pagination/pagination-controls";
 import { parsePageSize, parsePage, paginate } from "@/lib/pagination";
 import { SearchInput } from "@/components/search/search-input";
-import { UserRound } from "lucide-react";
+import { UserRound, ReceiptText } from "lucide-react";
+import Link from "next/link";
 
 export default async function TenantsPage(props: PageProps<"/tenants">) {
   const user = await requireUser();
   // Employees see the action controls their role opens; the server guard enforces the rest.
   const canManage = await can("tenants.edit");
+  // Collection staff print a tenant's account without being shown the owners' side of the books.
+  const canStatement = await can("statements.tenant");
   const params = await props.searchParams;
   const size = parsePageSize(params.size);
   const page = parsePage(params.page);
@@ -74,7 +77,7 @@ export default async function TenantsPage(props: PageProps<"/tenants">) {
                       <TableHead>الجوال</TableHead>
                       <TableHead>الوحدة الحالية</TableHead>
                       <TableHead>عدد العقود</TableHead>
-                      {canManage && <TableHead className="w-24">خيارات</TableHead>}
+                      {(canManage || canStatement) && <TableHead className="w-32">خيارات</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -88,11 +91,22 @@ export default async function TenantsPage(props: PageProps<"/tenants">) {
                             {activeContract ? `${activeContract.unit.building.name} - ${activeContract.unit.unitNumber}` : "—"}
                           </TableCell>
                           <TableCell>{t.contracts.length}</TableCell>
-                          {canManage && (
+                          {(canManage || canStatement) && (
                             <TableCell>
                               <div className="flex items-center gap-1">
-                                <EditTenantDialog tenant={t} />
-                                <DeleteButton action={deleteTenant.bind(null, t.id)} permission="tenants.delete" title="حذف المستأجر" description="لا يمكن حذف مستأجر مرتبط بعقود." />
+                                {canStatement && t.contracts.length > 0 && (
+                                  <Link
+                                    href={`/tenants/${t.id}/statement`}
+                                    title="كشف حساب"
+                                    className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+                                  >
+                                    <ReceiptText className="size-4" />
+                                  </Link>
+                                )}
+                                {canManage && <EditTenantDialog tenant={t} />}
+                                {canManage && (
+                                  <DeleteButton action={deleteTenant.bind(null, t.id)} permission="tenants.delete" title="حذف المستأجر" description="لا يمكن حذف مستأجر مرتبط بعقود." />
+                                )}
                               </div>
                             </TableCell>
                           )}

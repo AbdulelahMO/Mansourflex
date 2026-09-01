@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, ReceiptText } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireUser, buildingScope } from "@/lib/session";
 import { can } from "@/lib/authz";
@@ -67,6 +67,7 @@ export default async function ContractDetailPage(props: PageProps<"/contracts/[i
   const scope = buildingScope(user);
   // Employees see the action controls their role opens; the server guard enforces the rest.
   const canManage = await can("contracts.edit");
+  const canStatement = await can("statements.tenant");
 
   const contract = await prisma.contract.findFirst({
     where: { id, unit: { building: scope } },
@@ -154,6 +155,14 @@ export default async function ContractDetailPage(props: PageProps<"/contracts/[i
                 renewedToNumber: contract.renewedTo?.contractNumber ?? null,
               }}
             />
+          )}
+          {canStatement && (
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/tenants/${contract.tenantId}/statement?contract=${contract.id}`}>
+                <ReceiptText className="size-4" />
+                كشف حساب المستأجر
+              </Link>
+            </Button>
           )}
           {canManage && <ContractActionsMenu id={contract.id} status={contract.status} />}
         </div>
